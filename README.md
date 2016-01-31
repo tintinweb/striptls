@@ -6,8 +6,14 @@ poc implementation of STARTTLS stripping attacks
  * SMTP.StripFromCapabilities - server response capability patch
  * SMTP.StripWithInvalidResponseCode - client STARTTLS stripping, invalid response code
  * SMTP.UntrustedIntercept - STARTTLS interception (client and server talking ssl) (requires server.pem in pwd)
- 
-* XMPP
+ * SMTP.StripWithTemporaryError
+ * SMTP.StripWithError
+
+* POP3 (untested)
+* IMAP (untested)
+* FTP (untested)
+* NNTP (untested)
+* XMPP (untested)
 
 ## Attacks
 
