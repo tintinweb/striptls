@@ -391,7 +391,7 @@ class RewriteDispatcher(object):
         if data!=data_orig:
             logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
         return data
-
+    
 if __name__ == '__main__':
     ret = 0
     if not len(sys.argv)>1:
@@ -408,7 +408,6 @@ if __name__ == '__main__':
         lastdot = classname.rfind(".")
         cls = getattr(locals().get(classname[:lastdot]),classname[lastdot+1:])
         
-
     # magic
     prx = ProxyServer(listen=local_listen, target=forward_to, buffer_size=4096, delay=0.00001)
     logger.info("%s ready."%prx)
