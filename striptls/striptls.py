@@ -811,7 +811,7 @@ def main():
         logger.warning( "Ctrl C - Stopping server")
         ret+=1
         
-    logger.info(" -- analysis results --")
+    logger.info(" -- audit results --")
     for client,resultlist in rewrite.get_results_by_clients().iteritems():
         logger.info("[*] client: %s"%client)
         for mangle, result in resultlist:
