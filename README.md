@@ -15,7 +15,7 @@ local smtp-client -> localhost:8825 (proxy) -> mail.gmx.net:25
 
 ### Strip STARTTLS from server capabilities
 
-	#> localhost 8825 mail.gmx.net 25 SMTP.StripFromCapabilities
+	#> striptls/striptls.py localhost 8825 mail.gmx.net 25 SMTP.StripFromCapabilities
 	2016-01-31 15:44:35,000 - INFO     - <Proxy 0x1fe6e70 listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
 	2016-01-31 15:44:35,000 - INFO     - <RewriteDispatcher attacks={25: set([<class __main__.StripFromCapabilities at 0x01FE77D8>])}>
 	2016-01-31 15:44:37,030 - DEBUG    - <ProtocolDetect 0x1fe6f90 is_protocol=PROTO_SMTP len_history=0> - protocol detected (target port)
@@ -33,7 +33,7 @@ local smtp-client -> localhost:8825 (proxy) -> mail.gmx.net:25
 
 ### Invalid STARTTLS response code
 
-	#> striptls.py localhost 8825 mail.gmx.net 25 SMTP.StripWithInvalidResponseCode
+	#> striptls/striptls.py localhost 8825 mail.gmx.net 25 SMTP.StripWithInvalidResponseCode
 	2016-01-31 15:42:40,325 - INFO     - <Proxy 0x1fefe70 listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
 	2016-01-31 15:42:40,325 - INFO     - <RewriteDispatcher attacks={25: set([<class __main__.StripWithInvalidResponseCode at 0x02010730>])}>
 	2016-01-31 15:43:19,755 - DEBUG    - <ProtocolDetect 0x1feff90 is_protocol=PROTO_SMTP len_history=0> - protocol detected (target port)
@@ -55,7 +55,7 @@ local smtp-client -> localhost:8825 (proxy) -> mail.gmx.net:25
 
 ### Untrusted SSL Intercept (for clients not checking server cert trust)
 
-	#> striptls.py localhost 8825 mail.gmx.net 25 SMTP.UntrustedIntercept
+	#> striptls/striptls.py localhost 8825 mail.gmx.net 25 SMTP.UntrustedIntercept
 	2016-01-31 15:59:02,417 - INFO     - <Proxy 0x1f468f0 listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
 	2016-01-31 15:59:02,417 - INFO     - <RewriteDispatcher attacks={25: set([<class __main__.UntrustedIntercept at 0x01F45298>])}>
 	2016-01-31 15:59:06,292 - DEBUG    - <ProtocolDetect 0x1f46a10 protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
