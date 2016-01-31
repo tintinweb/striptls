@@ -305,12 +305,6 @@ class SMTP:
         TLS_KEYFILE = "server.pem"
         @staticmethod
         def mangle_server_data(session, data):
-            if any(e in session.outbound.sndbuf.lower() for e in ('ehlo','helo')) and "250" in data:
-                features = list(data.strip().split("\r\n"))
-                features.insert(-1,"250-STARTTLS")     # add STARTTLS from capabilities
-                #if "STARTTLS" in data:
-                #    features = [f for f in features if not "STARTTLS" in f]    # remove STARTTLS from capabilities
-                data = '\r\n'.join(features)+'\r\n' 
             return data
         @staticmethod
         def mangle_client_data(session, data):
