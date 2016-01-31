@@ -320,7 +320,7 @@ class SMTP:
                 # outbound ssl
                 
                 session.outbound.sendall(data)
-                logging.debug("%s [client] => [server] %s"%(session,repr(data)))
+                logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                 resp_data = session.outbound.recv()
                 if "220" not in resp_data:
                     raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
