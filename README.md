@@ -1,4 +1,4 @@
-# striptls - proxy
+# striptls - auditing proxy
 
 poc implementation of STARTTLS stripping attacks
 
@@ -8,14 +8,27 @@ poc implementation of STARTTLS stripping attacks
  * SMTP.UntrustedIntercept - STARTTLS interception (client and server talking ssl) (requires server.pem in pwd)
  * SMTP.StripWithTemporaryError
  * SMTP.StripWithError
-
 * POP3 (untested)
+ * POP3.StripFromCapabilities
+ * POP3.StripWithError
+ * POP3.UntrustedIntercept
 * IMAP (untested)
+ * IMAP.StripFromCapabilities
+ * IMAP.StripWithError
+ * IMAP.UntrustedIntercept
 * FTP (untested)
+ * FTP.StripFromCapabilities
+ * FTP.StripWithError
+ * FTP.UntrustedIntercept
 * NNTP (untested)
+ * NNTP.StripFromCapabilities  
+ * NNTP.StripWithError
+ * NNTP.UntrustedIntercept
 * XMPP (untested)
-
-## Attacks
+ * XMPP.StripFromCapabilities
+ 
+ 
+## Examples
 
 local smtp-client -> localhost:8825 (proxy) -> mail.gmx.net:25
 
