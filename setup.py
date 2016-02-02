@@ -16,7 +16,7 @@ setup(
     description=(
         "poc implementation of STARTTLS stripping attacks"),
     license="GPLv2",
-    keywords=["starttls","strip","proxy"],
+    keywords=["striptls", "starttls", "strip", "attack", "proxy"],
     url="https://github.com/tintinweb/striptls/",
     download_url="https://github.com/tintinweb/striptls/tarball/v0.1",
     long_description=read("README.rst") if os.path.isfile("README.rst") else read("README.md"),
