@@ -26,8 +26,49 @@ poc implementation of STARTTLS stripping attacks
  * NNTP.UntrustedIntercept
 * XMPP (untested)
  * XMPP.StripFromCapabilities
- 
- 
+
+## Usage
+
+    #> python -m striptls --help	# in case you've installed it from pip/setup.py
+    #> python striptls                  # from source
+    Usage: striptls [options]
+            example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25 --tests *
+
+
+    Options:
+      -h, --help            show this help message and exit
+      -v, --verbose         make lots of noise [default]
+      -l LISTEN, --listen=LISTEN
+                            listen ip:port
+      -r REMOTE, --remote=REMOTE
+                            target ip:port
+      -t TESTS, --tests=TESTS
+                            Comma separated list of tests. * selects ALL.
+                            Available Tests: FTP.StripFromCapabilities,
+                            FTP.StripWithError, FTP.UntrustedIntercept,
+                            IMAP.StripFromCapabilities, IMAP.StripWithError,
+                            IMAP.UntrustedIntercept, NNTP.StripFromCapabilities,
+                            NNTP.StripWithError, NNTP.UntrustedIntercept,
+                            POP3.StripWithError, POP3.UntrustedIntercept,
+                            SMTP.StripFromCapabilities, SMTP.StripWithError,
+                            SMTP.StripWithInvalidResponseCode,
+                            SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
+                            XMPP.StripFromCapabilities [default: *]
+    Usage: striptls [options]
+            example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25 --tests *
+
+
+
+## Install (optional)
+
+from pip
+
+    #> pip install striptls
+
+from source
+
+    #> setup.py install
+
 ## Examples
 
 local smtp-client -> localhost:8825 (proxy) -> mail.gmx.net:25

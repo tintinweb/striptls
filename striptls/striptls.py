@@ -655,12 +655,12 @@ class Tests:
 
 class RewriteDispatcher(object):
     def __init__(self):
-        self.mangles = {}   # proto:[attacks]
+        self.vectors = {}   # proto:[vectors]
         self.results = []   # [ {session,client_ip,mangle,result}, }
         self.session_to_mangle = {}  # session:mangle
         
     def __repr__(self):
-        return "<RewriteDispatcher rules=%s>"%repr(self.mangles)
+        return "<RewriteDispatcher vectors=%s>"%repr(self.vectors)
     
     def get_results(self):
         return self.results
@@ -686,8 +686,8 @@ class RewriteDispatcher(object):
         r['result'] = value
           
     def add(self, proto, attack):
-        self.mangles.setdefault(proto,set([]))
-        self.mangles[proto].add(attack)
+        self.vectors.setdefault(proto,set([]))
+        self.vectors[proto].add(attack)
         
     def get_mangle(self, session):
         ''' smart select mangle
@@ -722,7 +722,7 @@ class RewriteDispatcher(object):
         return mangle
         
     def get_mangles(self, proto):
-        return self.mangles.get(proto,[])
+        return self.vectors.get(proto,[])
         
     def mangle_server_data(self, session, data):
         data_orig = data
