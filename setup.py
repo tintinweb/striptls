@@ -19,6 +19,7 @@ setup(
     keywords=["striptls", "starttls", "strip", "attack", "proxy"],
     url="https://github.com/tintinweb/striptls/",
     download_url="https://github.com/tintinweb/striptls/tarball/v0.1",
+    #python setup.py register -r https://testpypi.python.org/pypi
     long_description=read("README.rst") if os.path.isfile("README.rst") else read("README.md"),
     install_requires=[],
     package_data={
