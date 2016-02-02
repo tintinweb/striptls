@@ -268,11 +268,11 @@ class ProxyServer(object):
                         self.inbound.remove(sock)
                     raise        
 
-class Tests:
+class Vectors:
     _TLS_CERTFILE = "server.pem"
     _TLS_KEYFILE = "server.pem"
     class SMTP:
-        _PORT = 25
+        _PROTO_ID = 25
         class StripFromCapabilities:
             ''' 1) Force Server response to *NOT* announce STARTTLS support
                 2) raise exception if client tries to negotiated STARTTLS
@@ -363,8 +363,8 @@ class Tests:
                     session.inbound.sendall("220 Go ahead\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("220 Go ahead\r\n")))
                     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
-                                            keyfile=Tests._TLS_KEYFILE)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_KEYFILE)
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
                     logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
                     # outbound ssl
@@ -384,7 +384,7 @@ class Tests:
                 return data
     
     class POP3:
-        _PORT = 110
+        _PROTO_ID = 110
         class StripWithError:
             ''' 1) force server error on client sending STLS
             '''
@@ -414,8 +414,8 @@ class Tests:
                     session.inbound.sendall("+OK Begin TLS negotiation\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("+OK Begin TLS negotiation\r\n")))
                     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
-                                            keyfile=Tests._TLS_CERTFILE)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_CERTFILE)
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
                     logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
                     # outbound ssl
@@ -433,7 +433,7 @@ class Tests:
                 return data
             
     class IMAP:
-        _PORT = 143
+        _PROTO_ID = 143
         class StripFromCapabilities:
             ''' 1) Force Server response to *NOT* announce STARTTLS support
                 2) raise exception if client tries to negotiated STARTTLS
@@ -480,8 +480,8 @@ class Tests:
                     session.inbound.sendall("%s OK Begin TLS negotation now\r\n"%id)
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s OK Begin TLS negotation now\r\n"%id)))
                     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
-                                            keyfile=Tests._TLS_CERTFILE)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_CERTFILE)
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
                     logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
                     # outbound ssl
@@ -499,7 +499,7 @@ class Tests:
                 return data
             
     class FTP:
-        _PORT = 21
+        _PROTO_ID = 21
         class StripFromCapabilities:
             ''' 1) Force Server response to *NOT* announce AUTH TLS support
                 2) raise exception if client tries to negotiated AUTH TLS
@@ -546,8 +546,8 @@ class Tests:
                     session.inbound.sendall("234 OK Begin TLS negotation now\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("234 OK Begin TLS negotation now\r\n")))
                     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
-                                            keyfile=Tests._TLS_KEYFILE)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_KEYFILE)
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
                     logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
                     # outbound ssl
@@ -565,7 +565,7 @@ class Tests:
                 return data
             
     class NNTP:
-        _PORT = 119
+        _PROTO_ID = 119
         class StripFromCapabilities:
             ''' 1) Force Server response to *NOT* announce AUTH TLS support
                 2) raise exception if client tries to negotiated AUTH TLS
@@ -612,8 +612,8 @@ class Tests:
                     session.inbound.sendall("382 Continue with TLS negotiation\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("382 Continue with TLS negotiation\r\n")))
                     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                    context.load_cert_chain(certfile=Tests._TLS_CERTFILE, 
-                                            keyfile=Tests._TLS_KEYFILE)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_KEYFILE)
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
                     logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
                     # outbound ssl
@@ -631,7 +631,7 @@ class Tests:
                 return data
     
     class XMPP:
-        _PORT = 5222
+        _PROTO_ID = 5222
         class StripFromCapabilities:
             ''' 1) Force Server response to *NOT* announce STARTTLS support
                 2) raise exception if client tries to negotiated STARTTLS
@@ -748,31 +748,31 @@ def main():
     from optparse import OptionParser
     ret = 0
     usage = """usage: %prog [options]
-        example: %prog --listen 0.0.0.0:25 --remote mail.server.tld:25 --tests *
+    
+       example: %prog --listen 0.0.0.0:25 --remote mail.server.tld:25 
     """
     parser = OptionParser(usage=usage)
     parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=True,
                   help="make lots of noise [default]")
-    parser.add_option("-l", "--listen", dest="listen", help="listen ip:port")
-    parser.add_option("-r", "--remote", dest="remote", help="target ip:port")
+    parser.add_option("-l", "--listen", dest="listen", help="listen ip:port [default: 0.0.0.0:<remote_port>]")
+    parser.add_option("-r", "--remote", dest="remote", help="remote target ip:port to forward sessions to")
+    parser.add_option("-k", "--key", dest="key", default="server.pem", help="SSL Certificate and Private key file to use, PEM format assumed [default: %default]")
     
-    all_tests = []
-    for proto in [t for t in dir(Tests) if not t.startswith("_")]:
-        for test in [t for t in dir(getattr(Tests,proto)) if not t.startswith("_")]:
-            all_tests.append("%s.%s"%(proto,test))
-    parser.add_option("-t", "--tests",
-                  default="*",
-                  help="Comma separated list of tests. * selects ALL. Available Tests: "+", ".join(all_tests)+""
+    all_vectors = []
+    for proto in (v for v in dir(Vectors) if not v.startswith("_")):
+        for test in (v for v in dir(getattr(Vectors,proto)) if not v.startswith("_")):
+            all_vectors.append("%s.%s"%(proto,test))
+    parser.add_option("-x", "--vectors",
+                  default="ALL",
+                  help="Comma separated list of vectors. Use 'ALL' (default) to select all vectors. Available vectors: "+", ".join(all_vectors)+""
                   " [default: %default]")
-    
     # parse args
     (options, args) = parser.parse_args()
     # normalize args
     if options.verbose:
         logger.setLevel(logging.DEBUG)
     if not options.remote:
-        parser.print_help()
         parser.error("mandatory option: remote")
     else:
         options.remote = options.remote.strip().split(":")
@@ -783,22 +783,23 @@ def main():
     else:
         options.listen = options.listen.strip().split(":")
         options.listen = (options.listen[0], int(options.listen[1]))
-    options.tests = [o.strip() for o in options.tests.strip().split(",")]
-    if "*" in options.tests:
-        options.tests = all_tests
+    options.vectors = [o.strip() for o in options.vectors.strip().split(",")]
+    if "ALL" in options.vectors:
+        options.vectors = all_vectors
+    Vectors._TLS_CERTFILE = Vectors._TLS_KEYFILE = options.key
           
     # ---- start up engines ----
     prx = ProxyServer(listen=options.listen, target=options.remote, buffer_size=4096, delay=0.00001)
     logger.info("%s ready."%prx)
     rewrite = RewriteDispatcher()
     
-    for classname in options.tests:
+    for classname in options.vectors:
         try:
-            proto, test = classname.split('.',1)
-            cls_proto = getattr(globals().get("Tests"),proto)
-            cls_test = getattr(cls_proto, test)
-            rewrite.add(cls_proto._PORT, cls_test)
-            logger.debug("* added test (port:%-5d, proto:%8s): %s"%(cls_proto._PORT, proto, repr(cls_test)))
+            proto, vector = classname.split('.',1)
+            cls_proto = getattr(globals().get("Vectors"),proto)
+            cls_vector = getattr(cls_proto, vector)
+            rewrite.add(cls_proto._PROTO_ID, cls_vector)
+            logger.debug("* added test (port:%-5d, proto:%8s): %s"%(cls_proto._PROTO_ID, proto, repr(cls_vector)))
         except Exception, e:
             raise e
 

