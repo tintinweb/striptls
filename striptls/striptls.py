@@ -705,6 +705,8 @@ class RewriteDispatcher(object):
         client_mangle_history = [r for r in self.get_results() if r['client']==client_ip]
         
         all_mangles = list(self.get_mangles(session.protocol.protocol_id))
+        if not all_mangles:
+            return None
         new_index = 0
         if client_mangle_history:
             previous_result = client_mangle_history[-1]
