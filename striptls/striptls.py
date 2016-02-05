@@ -382,6 +382,20 @@ class Vectors:
                 elif "mail from" in data.lower():
                     rewrite.set_result(session, True)
                 return data
+            
+        class ProtocolDowngradeStripExtendedMode:
+            ''' Return error on EHLO to force peer to non-extended mode
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if data.lower().startswith("ehlo "):
+                    session.inbound.sendall("502 Error: command \"EHLO\" not implemented\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Error: command \"EHLO\" not implemented\r\n")))
+                    data=None
+                return data
     
     class POP3:
         _PROTO_ID = 110
