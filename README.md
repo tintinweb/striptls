@@ -8,15 +8,16 @@ poc implementation of STARTTLS stripping attacks
  * SMTP.UntrustedIntercept - STARTTLS interception (client and server talking ssl) (requires server.pem in pwd)
  * SMTP.StripWithTemporaryError
  * SMTP.StripWithError
-* POP3 (untested)
+ * SMTP.ProtocolDowngradeStripExtendedMode
+* POP3 
  * POP3.StripFromCapabilities
  * POP3.StripWithError
  * POP3.UntrustedIntercept
-* IMAP (untested)
+* IMAP 
  * IMAP.StripFromCapabilities
  * IMAP.StripWithError
  * IMAP.UntrustedIntercept
-* FTP (untested)
+* FTP
  * FTP.StripFromCapabilities
  * FTP.StripWithError
  * FTP.UntrustedIntercept
@@ -36,29 +37,29 @@ poc implementation of STARTTLS stripping attacks
 	       example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25
 	
 	
-	Options:
-	  -h, --help            show this help message and exit
-	  -v, --verbose         make lots of noise [default]
-	  -l LISTEN, --listen=LISTEN
-	                        listen ip:port [default: 0.0.0.0:<remote_port>]
-	  -r REMOTE, --remote=REMOTE
-	                        remote target ip:port to forward sessions to
-	  -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
-	                        format assumed [default: server.pem]
-	  -x VECTORS, --vectors=VECTORS
-	                        Comma separated list of vectors. Use 'ALL' (default)
-	                        to select all vectors. Available vectors:
-	                        FTP.StripFromCapabilities, FTP.StripWithError,
-	                        FTP.UntrustedIntercept, IMAP.StripFromCapabilities,
-	                        IMAP.StripWithError, IMAP.UntrustedIntercept,
-	                        NNTP.StripFromCapabilities, NNTP.StripWithError,
-	                        NNTP.UntrustedIntercept, POP3.StripWithError,
-	                        POP3.UntrustedIntercept, SMTP.StripFromCapabilities,
-	                        SMTP.StripWithError,
-	                        SMTP.StripWithInvalidResponseCode,
-	                        SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
-	                        XMPP.StripFromCapabilities [default: ALL]
-
+        Options:
+          -h, --help            show this help message and exit
+          -v, --verbose         make lots of noise [default]
+          -l LISTEN, --listen=LISTEN
+                                listen ip:port [default: 0.0.0.0:<remote_port>]
+          -r REMOTE, --remote=REMOTE
+                                remote target ip:port to forward sessions to
+          -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
+                                format assumed [default: server.pem]
+          -x VECTORS, --vectors=VECTORS
+                                Comma separated list of vectors. Use 'ALL' (default)
+                                to select all vectors. Available vectors:
+                                FTP.StripFromCapabilities, FTP.StripWithError,
+                                FTP.UntrustedIntercept, IMAP.StripFromCapabilities,
+                                IMAP.StripWithError, IMAP.UntrustedIntercept,
+                                NNTP.StripFromCapabilities, NNTP.StripWithError,
+                                NNTP.UntrustedIntercept, POP3.StripFromCapabilities,
+                                POP3.StripWithError, POP3.UntrustedIntercept,
+                                SMTP.ProtocolDowngradeStripExtendedMode,
+                                SMTP.StripFromCapabilities, SMTP.StripWithError,
+                                SMTP.StripWithInvalidResponseCode,
+                                SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
+                                XMPP.StripFromCapabilities [default: ALL]
 
 
 ## Install (optional)
