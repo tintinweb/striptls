@@ -252,7 +252,7 @@ iterates all protocol specific cases on a per client basis and keeps track of cl
 
 ### XMPP Audit Trail
 
-Example: Pidgin with security disabled.
+Example: Pidgin with optional transport security.
 
 #### XMPP.StripInboundTLS - Inbound Plain - Outbound TLS - in case server requires starttls
 
