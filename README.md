@@ -30,6 +30,19 @@ poc implementation of STARTTLS stripping attacks
  * XMPP.StripInboundTLS
  * XMPP.UntrustedIntercept
 
+Results:
+
+    - [*] client: 127.0.0.1
+    -     [Vulnerable!] <class striptls.StripWithInvalidResponseCode at 0xffd3138c>
+    -     [Vulnerable!] <class striptls.StripWithTemporaryError at 0xffd4611c>
+    -     [           ] <class striptls.StripFromCapabilities at 0xffd316bc>
+    -     [Vulnerable!] <class striptls.StripWithError at 0xffd4614c>
+    - [*] client: 192.168.139.1
+    -     [Vulnerable!] <class striptls.StripInboundTLS at 0x7f08319a6808>
+    -     [Vulnerable!] <class striptls.StripFromCapabilities at 0x7f08319a67a0>
+    -     [Vulnerable!] <class striptls.UntrustedIntercept at 0x7f08319a6870>
+
+
 ## Usage
 
     #> python -m striptls --help    # from pip/setup.py
