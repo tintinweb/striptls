@@ -9,7 +9,7 @@ def read(fname):
 
 setup(
     name="striptls",
-    version="0.1",
+    version="0.2",
     packages=["striptls"],
     author="tintinweb",
     author_email="tintinweb@oststrom.com",
