@@ -871,17 +871,21 @@ class Vectors:
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
-                mangled = []
-                for line in data.split("\n"):
-                    if all(kw.lower() in line.lower() for kw in (" cap "," tls")):
-                        # can be CAP LS or CAP ACK/NACK
-                        if " ack " in data.lower():
-                            line = line.replace("ACK","NAK").replace("ack","nak")
-                        else:   #ls
-                            features = line.split(" ")
-                            line = ' '.join(f for f in features if not 'tls' in f.lower())
-                    mangled.append(line)
-                return "\n".join(mangled)
+                if all(kw.lower() in data.lower() for kw in (" cap "," tls")):
+                    mangled = []
+                    for line in data.split("\n"):
+                        if all(kw.lower() in line.lower() for kw in (" cap "," tls")):
+                            # can be CAP LS or CAP ACK/NACK
+                            if " ack " in data.lower():
+                                line = line.replace("ACK","NAK").replace("ack","nak")
+                            else:   #ls
+                                features = line.split(" ")
+                                line = ' '.join(f for f in features if not 'tls' in f.lower())
+                        mangled.append(line)
+                    data = "\n".join(mangled)
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
+                    rewrite.set_result(session, True)
+                return 
             @staticmethod
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
@@ -892,7 +896,7 @@ class Vectors:
                 #        cmd, caps = data.split(":")
                 #        caps = (c for c in caps.split(" ") if not "tls" in c.lower())
                 #        data="%s:%s"%(cmd,' '.join(caps))
-                elif "AUTHENTICATE " in data:       
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
                 return data
         
@@ -901,6 +905,8 @@ class Vectors:
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
+                if any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
+                    rewrite.set_result(session, True)
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
@@ -921,7 +927,7 @@ class Vectors:
                     session.inbound.sendall("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)))
                     data=None
-                elif "AUTHENTICATE " in data:
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
                 return data
         
@@ -930,6 +936,8 @@ class Vectors:
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
+                if any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
+                    rewrite.set_result(session, True)
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
@@ -950,7 +958,7 @@ class Vectors:
                     session.inbound.sendall("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
                     data=None
-                elif "AUTHENTICATE " in data:
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
                 return data
             
@@ -959,6 +967,8 @@ class Vectors:
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
+                if any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
+                    rewrite.set_result(session, True)
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
@@ -979,7 +989,7 @@ class Vectors:
                     session.inbound.sendall("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
                     data=None
-                elif "AUTHENTICATE " in data:
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
                 return data
             
@@ -988,12 +998,14 @@ class Vectors:
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
+                if any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
+                    rewrite.set_result(session, True)
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     data=None
-                elif "AUTHENTICATE " in data:
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
                 return data
     
@@ -1007,6 +1019,8 @@ class Vectors:
                 if " ident " in data.lower():
                     #TODO: proxy ident
                     pass
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
+                    rewrite.set_result(session, True)
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
@@ -1044,7 +1058,7 @@ class Vectors:
                     session.outbound.ssl_wrap_socket()
     
                     data=None
-                elif "AUTHENTICATE " in data:
+                elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
                 return data
 
