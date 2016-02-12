@@ -29,6 +29,17 @@ poc implementation of STARTTLS stripping attacks
  * XMPP.StripFromCapabilities
  * XMPP.StripInboundTLS
  * XMPP.UntrustedIntercept
+* ACAP (untested)
+ * ACAP.StripFromCapabilities 
+ * ACAP.StripWithError
+ * ACAP.UntrustedIntercept
+* IRC (untested)
+ * IRC.StripFromCapabilities
+ * IRC.StripWithError
+ * IRC.UntrustedIntercept
+ * IRC.StripWithNotRegistered
+ * IRC.StripCAPWithNotregistered
+ * IRC.StripWithSilentDrop
 
 Results:
 
@@ -64,12 +75,18 @@ Results:
           -x VECTORS, --vectors=VECTORS
                                 Comma separated list of vectors. Use 'ALL' (default)
                                 to select all vectors. Available vectors:
-                                FTP.StripFromCapabilities, FTP.StripWithError,
-                                FTP.UntrustedIntercept, IMAP.StripFromCapabilities,
-                                IMAP.StripWithError, IMAP.UntrustedIntercept,
-                                NNTP.StripFromCapabilities, NNTP.StripWithError,
-                                NNTP.UntrustedIntercept, POP3.StripFromCapabilities,
-                                POP3.StripWithError, POP3.UntrustedIntercept,
+                                ACAP.StripFromCapabilities, ACAP.StripWithError,
+                                ACAP.UntrustedIntercept, FTP.StripFromCapabilities,
+                                FTP.StripWithError, FTP.UntrustedIntercept,
+                                IMAP.StripFromCapabilities, IMAP.StripWithError,
+                                IMAP.UntrustedIntercept,
+                                IRC.StripCAPWithNotRegistered,
+                                IRC.StripFromCapabilities, IRC.StripWithError,
+                                IRC.StripWithNotRegistered, IRC.StripWithSilentDrop,
+                                IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
+                                NNTP.StripWithError, NNTP.UntrustedIntercept,
+                                POP3.StripFromCapabilities, POP3.StripWithError,
+                                POP3.UntrustedIntercept,
                                 SMTP.ProtocolDowngradeStripExtendedMode,
                                 SMTP.StripFromCapabilities, SMTP.StripWithError,
                                 SMTP.StripWithInvalidResponseCode,
