@@ -33,7 +33,7 @@ poc implementation of STARTTLS stripping attacks
  * ACAP.StripFromCapabilities 
  * ACAP.StripWithError
  * ACAP.UntrustedIntercept
-* IRC (untested)
+* IRC
  * IRC.StripFromCapabilities
  * IRC.StripWithError
  * IRC.UntrustedIntercept
