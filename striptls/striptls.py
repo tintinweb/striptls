@@ -297,6 +297,24 @@ class Vectors:
                     rewrite.set_result(session, True)
                 return data
             
+        class ProtocolDowngradeToV2:
+            ''' Return IMAP2 instead of IMAP4 in initial server response
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                if all(kw.lower() in data.lower() for kw in ("IMAP4","* OK ")):
+                    session.inbound.sendall("OK IMAP2 Server Ready\r\n")
+                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("OK IMAP2 Server Ready\r\n")))
+                    data=None
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(data))
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
+            
         class StripWithInvalidResponseCode:
             ''' 1) Force Server response to contain STARTTLS even though it does not support it (just because we can)
                 2) Respond to client STARTTLS with invalid response code
@@ -376,6 +394,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if "220" not in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
@@ -399,6 +418,24 @@ class Vectors:
                     session.inbound.sendall("502 Error: command \"EHLO\" not implemented\r\n")
                     logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Error: command \"EHLO\" not implemented\r\n")))
                     data=None
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
+                return data
+            
+        class InjectCommand:
+            ''' Append command to STARTTLS\r\n.
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                if "STARTTLS" in data:
+                    #data += "WTF\r\n"
+                    #logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
+                    Vectors.SMTP.UntrustedIntercept.mangle_client_data(session, data, rewrite)
+                elif "mail from" in data.lower():
+                    rewrite.set_result(session, True)
                 return data
     
     class POP3:
@@ -462,6 +499,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if "+OK" not in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
@@ -535,6 +573,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if "%s OK"%id not in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
@@ -607,6 +646,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if not resp_data.startswith("234"):
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
@@ -679,6 +719,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if not resp_data.startswith("382"):
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
@@ -774,6 +815,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if not resp_data.startswith("<proceed "):
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
 
@@ -849,6 +891,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if not " OK " in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
@@ -1051,6 +1094,7 @@ class Vectors:
                     session.outbound.sendall(data)
                     logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
                     resp_data = session.outbound.recv()
+                    logging.debug("%s          <= [server]          %s"%(session,repr(resp_data)))
                     if not " 670 " in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     

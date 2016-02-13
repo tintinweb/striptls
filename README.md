@@ -9,6 +9,7 @@ poc implementation of STARTTLS stripping attacks
  * SMTP.StripWithTemporaryError
  * SMTP.StripWithError
  * SMTP.ProtocolDowngradeStripExtendedMode
+ * SMTP.InjectCommand
 * POP3 
  * POP3.StripFromCapabilities
  * POP3.StripWithError
@@ -17,6 +18,7 @@ poc implementation of STARTTLS stripping attacks
  * IMAP.StripFromCapabilities
  * IMAP.StripWithError
  * IMAP.UntrustedIntercept
+ * IMAP.ProtocolDowngradeToV2
 * FTP
  * FTP.StripFromCapabilities
  * FTP.StripWithError
@@ -86,8 +88,9 @@ Results:
                                 IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
                                 NNTP.StripWithError, NNTP.UntrustedIntercept,
                                 POP3.StripFromCapabilities, POP3.StripWithError,
-                                POP3.UntrustedIntercept,
+                                POP3.UntrustedIntercept, SMTP.InjectCommand,
                                 SMTP.ProtocolDowngradeStripExtendedMode,
+                                SMTP.ProtocolDowngradeToV2,
                                 SMTP.StripFromCapabilities, SMTP.StripWithError,
                                 SMTP.StripWithInvalidResponseCode,
                                 SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
