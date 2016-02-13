@@ -423,7 +423,8 @@ class Vectors:
                 return data
             
         class InjectCommand:
-            ''' Append command to STARTTLS\r\n.
+            ''' 1) Append command to STARTTLS\r\n.
+                2) untrusted intercept to check if we get an invalid command response from server
             '''
             @staticmethod
             def mangle_server_data(session, data, rewrite):
@@ -431,9 +432,13 @@ class Vectors:
             @staticmethod
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
-                    #data += "WTF\r\n"
+                    data += "INJECTED_INVALID_COMMAND\r\n"
                     #logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
-                    Vectors.SMTP.UntrustedIntercept.mangle_client_data(session, data, rewrite)
+                    try:
+                        Vectors.SMTP.UntrustedIntercept.mangle_client_data(session, data, rewrite)
+                    except ssl.SSLEOFError, se:
+                        logging.info("%s - Server failed to negotiate SSL with Exception: %s"%(session, repr(se))) 
+                        session.close()
                 elif "mail from" in data.lower():
                     rewrite.set_result(session, True)
                 return data
