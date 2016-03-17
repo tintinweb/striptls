@@ -1356,15 +1356,24 @@ def main():
         logger.setLevel(logging.DEBUG)
     if not options.remote:
         parser.error("mandatory option: remote")
-    else:
+    if ":" not in options.remote and ":" in options.listen:
+        # no port in remote, but there is one in listen. use this one
+        options.remote = (options.remote.strip(), int(options.listen.strip().split(":")[1]))
+        logger.warning("no remote port specified - falling back to %s:%d (listen port)"%options.remote)
+    elif ":" in options.remote:
         options.remote = options.remote.strip().split(":")
         options.remote = (options.remote[0], int(options.remote[1]))
-    if not options.listen:
-        logger.warning("no listen port specified - falling back to 0.0.0.0:%d"%options.remote[1])
-        options.listen = ("0.0.0.0",options.remote[1])
     else:
+        parser.error("neither remote nor listen is in the format <host>:<port>")
+    if not options.listen:
+        logger.warning("no listen port specified - falling back to 0.0.0.0:%d (remote port)"%options.remote[1])
+        options.listen = ("0.0.0.0",options.remote[1])
+    elif ":" in options.listen:
         options.listen = options.listen.strip().split(":")
         options.listen = (options.listen[0], int(options.listen[1]))
+    else:
+        options.listen = (options.listen.strip(), options.remote[1])
+        logger.warning("no listen port specified - falling back to %s:%d (remote port)"%options.listen)
     options.vectors = [o.strip() for o in options.vectors.strip().split(",")]
     if "ALL" in options.vectors:
         options.vectors = all_vectors
