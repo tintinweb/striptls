@@ -65,9 +65,20 @@ class TcpSockBuff(object):
                 pass
             force_first_loop_iteration = False
  
-    def send(self, data):
+    def send(self, data, retransmit_delay=0.1):
         if self.socket_ssl:
-            self.socket_ssl.write(data)
+            last_exception = None
+            for _ in xrange(3):
+                try:
+                    self.socket_ssl.write(data)
+                    last_exception = None
+                    break
+                except ssl.SSLWantWriteError,swwe:
+                    logger.warning("TCPSockBuff: ssl.sock not yet ready, retransmit (%d) in %f seconds: %s"%(_,retransmit_delay,repr(swwe)))
+                    last_exception = swwe
+                time.sleep(retransmit_delay)
+            if last_exception:
+                raise last_exception
         else:
             self.socket.send(data)
         self.sndbuf = data
