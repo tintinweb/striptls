@@ -60,11 +60,11 @@ Results:
 
     #> python -m striptls --help    # from pip/setup.py
     #> python striptls --help       # from source / root folder
-	Usage: striptls [options]
-	
-	       example: striptls --listen 0.0.0.0:25 --remote mail.server.tld:25
-	
-	
+        Usage: striptls.py [options]
+
+               example: striptls.py --listen 0.0.0.0:25 --remote mail.server.tld:25
+
+
         Options:
           -h, --help            show this help message and exit
           -v, --verbose         make lots of noise [default]
@@ -80,6 +80,7 @@ Results:
                                 ACAP.StripFromCapabilities, ACAP.StripWithError,
                                 ACAP.UntrustedIntercept, FTP.StripFromCapabilities,
                                 FTP.StripWithError, FTP.UntrustedIntercept,
+                                IMAP.ProtocolDowngradeToV2,
                                 IMAP.StripFromCapabilities, IMAP.StripWithError,
                                 IMAP.UntrustedIntercept,
                                 IRC.StripCAPWithNotRegistered,
@@ -88,15 +89,14 @@ Results:
                                 IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
                                 NNTP.StripWithError, NNTP.UntrustedIntercept,
                                 POP3.StripFromCapabilities, POP3.StripWithError,
-                                POP3.UntrustedIntercept, SMTP.InjectCommand,
+                                POP3.UntrustedIntercept, SMTP.InboundStarttlsProxy,
+                                SMTP.InjectCommand,
                                 SMTP.ProtocolDowngradeStripExtendedMode,
-                                SMTP.ProtocolDowngradeToV2,
                                 SMTP.StripFromCapabilities, SMTP.StripWithError,
                                 SMTP.StripWithInvalidResponseCode,
                                 SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
                                 XMPP.StripFromCapabilities, XMPP.StripInboundTLS,
                                 XMPP.UntrustedIntercept [default: ALL]
-
 
 ## Install (optional)
 
