@@ -43,6 +43,9 @@ poc implementation of STARTTLS stripping attacks
  * IRC.StripCAPWithNotregistered
  * IRC.StripWithSilentDrop
 
+* ANY
+ * ANY.Proxy		- just an ordinary tcp proxy (optionally an ssl/tls proxy with `--generic-ssl-interception` - see example below)
+
 Results:
 
     - [*] client: 127.0.0.1
@@ -60,43 +63,45 @@ Results:
 
     #> python -m striptls --help    # from pip/setup.py
     #> python striptls --help       # from source / root folder
-        Usage: striptls.py [options]
+    Usage: striptls.py [options]
 
-               example: striptls.py --listen 0.0.0.0:25 --remote mail.server.tld:25
+           example: striptls.py --listen 0.0.0.0:25 --remote mail.server.tld:25
 
 
-        Options:
-          -h, --help            show this help message and exit
-          -v, --verbose         make lots of noise [default]
-          -l LISTEN, --listen=LISTEN
-                                listen ip:port [default: 0.0.0.0:<remote_port>]
-          -r REMOTE, --remote=REMOTE
-                                remote target ip:port to forward sessions to
-          -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
-                                format assumed [default: server.pem]
-          -x VECTORS, --vectors=VECTORS
-                                Comma separated list of vectors. Use 'ALL' (default)
-                                to select all vectors. Available vectors:
-                                ACAP.StripFromCapabilities, ACAP.StripWithError,
-                                ACAP.UntrustedIntercept, FTP.StripFromCapabilities,
-                                FTP.StripWithError, FTP.UntrustedIntercept,
-                                IMAP.ProtocolDowngradeToV2,
-                                IMAP.StripFromCapabilities, IMAP.StripWithError,
-                                IMAP.UntrustedIntercept,
-                                IRC.StripCAPWithNotRegistered,
-                                IRC.StripFromCapabilities, IRC.StripWithError,
-                                IRC.StripWithNotRegistered, IRC.StripWithSilentDrop,
-                                IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
-                                NNTP.StripWithError, NNTP.UntrustedIntercept,
-                                POP3.StripFromCapabilities, POP3.StripWithError,
-                                POP3.UntrustedIntercept, SMTP.InboundStarttlsProxy,
-                                SMTP.InjectCommand,
-                                SMTP.ProtocolDowngradeStripExtendedMode,
-                                SMTP.StripFromCapabilities, SMTP.StripWithError,
-                                SMTP.StripWithInvalidResponseCode,
-                                SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
-                                XMPP.StripFromCapabilities, XMPP.StripInboundTLS,
-                                XMPP.UntrustedIntercept [default: ALL]
+    Options:
+      -h, --help            show this help message and exit
+      -v, --verbose         make lots of noise [default]
+      -l LISTEN, --listen=LISTEN
+                            listen ip:port [default: 0.0.0.0:<remote_port>]
+      -r REMOTE, --remote=REMOTE
+                            remote target ip:port to forward sessions to
+      -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
+                            format assumed [default: server.pem]
+      -s, --generic-ssl-interception
+                            dynamically intercept SSL/TLS
+      -x VECTORS, --vectors=VECTORS
+                            Comma separated list of vectors. Use 'ALL' (default)
+                            to select all vectors. Available vectors:
+                            ACAP.StripFromCapabilities, ACAP.StripWithError,
+                            ACAP.UntrustedIntercept, ANY.Proxy,
+                            FTP.StripFromCapabilities, FTP.StripWithError,
+                            FTP.UntrustedIntercept, IMAP.ProtocolDowngradeToV2,
+                            IMAP.StripFromCapabilities, IMAP.StripWithError,
+                            IMAP.UntrustedIntercept,
+                            IRC.StripCAPWithNotRegistered,
+                            IRC.StripFromCapabilities, IRC.StripWithError,
+                            IRC.StripWithNotRegistered, IRC.StripWithSilentDrop,
+                            IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
+                            NNTP.StripWithError, NNTP.UntrustedIntercept,
+                            POP3.StripFromCapabilities, POP3.StripWithError,
+                            POP3.UntrustedIntercept, SMTP.InboundStarttlsProxy,
+                            SMTP.InjectCommand,
+                            SMTP.ProtocolDowngradeStripExtendedMode,
+                            SMTP.StripFromCapabilities, SMTP.StripWithError,
+                            SMTP.StripWithInvalidResponseCode,
+                            SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
+                            XMPP.StripFromCapabilities, XMPP.StripInboundTLS,
+                            XMPP.UntrustedIntercept [default: ALL]
 
 ## Install (optional)
 
@@ -343,3 +348,21 @@ Example: Pidgin with optional transport security.
         2016-02-05 16:53:46,353 - INFO     -     [Vulnerable!] <class striptls.StripInboundTLS at 0x7f08319a6808>
         2016-02-05 16:53:46,353 - INFO     -     [Vulnerable!] <class striptls.StripFromCapabilities at 0x7f08319a67a0>
         2016-02-05 16:53:46,353 - INFO     -     [Vulnerable!] <class striptls.UntrustedIntercept at 0x7f08319a6870>
+
+#### Generic SSL/TLS Interception Proxy
+
+        # python ./striptls.py --listen 0.0.0.0:9999 --remote mail.gmx.net:465 --generic-ssl-interception -x ANY.Proxy -k /root/server.pem
+        2016-03-24 19:30:49,206 - INFO     - <Proxy 0x7fe4e386b8d0 listen=('0.0.0.0', 9999) target=('mail.gmx.net', 465)> ready.
+        2016-03-24 19:30:49,207 - DEBUG    - * added test (port:-1   , proto:     ANY): <class __main__.Proxy at 0x7fe4e38448d8>
+        2016-03-24 19:30:49,207 - INFO     - <RewriteDispatcher vectors={-1: set([<class __main__.Proxy at 0x7fe4e38448d8>])}>
+        2016-03-24 19:30:52,087 - INFO     - <Session 0x7fe4e3837390> client ('127.0.0.1', 47616) has connected
+        2016-03-24 19:30:52,088 - INFO     - <Session 0x7fe4e3837390> connecting to target ('mail.gmx.net', 465)
+        2016-03-24 19:30:52,145 - INFO     - ProtocolDetect: SSL/TLS version: TLS_1_0
+        2016-03-24 19:30:52,146 - INFO     - SSL Handshake detected - performing ssl/tls conversion
+        2016-03-24 19:30:52,388 - DEBUG    - <Session 0x7fe4e3837390> [client] <= [server]          '220 gmx.com (mrgmx103) Nemesis ESMTP Service ready\r\n'
+        2016-03-24 19:30:54,805 - DEBUG    - <Session 0x7fe4e3837390> [client] => [server]          'HI\r\n'
+        2016-03-24 19:30:54,874 - DEBUG    - <Session 0x7fe4e3837390> [client] <= [server]          '500 Syntax error, command unrecognized\r\n'
+        2016-03-24 19:30:56,761 - WARNING  - Ctrl C - Stopping server
+        2016-03-24 19:30:56,761 - INFO     -  -- audit results --
+
+

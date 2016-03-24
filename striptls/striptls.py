@@ -40,7 +40,7 @@ class TcpSockBuff(object):
     def accept(self):
         return self.socket.accept()
                 
-    def recv(self, buflen=8*1024):
+    def recv(self, buflen=8*1024, *args, **kwargs):
         if self.socket_ssl:
             chunks = []
             chunk = True
@@ -51,16 +51,16 @@ class TcpSockBuff(object):
                 data_pending = self.socket_ssl.pending()
             self.recvbuf = ''.join(chunks)
         else:
-            self.recvbuf = self.socket.recv(buflen)
+            self.recvbuf = self.socket.recv(buflen, *args, **kwargs)
         return self.recvbuf
     
-    def recv_blocked(self, buflen=8*1024, timeout=None):
+    def recv_blocked(self, buflen=8*1024, timeout=None, *args, **kwargs):
         force_first_loop_iteration = True
         end = time.time()+timeout if timeout else 0
         while force_first_loop_iteration or (not timeout or time.time()<end):
             # force one recv otherwise we might not even try to read if timeout is too narrow
             try:
-                return self.recv(buflen=buflen)
+                return self.recv(buflen=buflen, *args, **kwargs)
             except ssl.SSLWantReadError:
                 pass
             force_first_loop_iteration = False
@@ -119,7 +119,8 @@ class ProtocolDetect(object):
     PROTO_NNTP = 119
     PROTO_IRC = 6667
     PROTO_ACAP = 675
-    
+    PROTO_SSL = 443
+ 
     PORTMAP = {25:  PROTO_SMTP,
                5222:PROTO_XMPP,
                110: PROTO_POP3,
@@ -155,8 +156,46 @@ class ProtocolDetect(object):
             return id
         for p in (a for a in dir(self) if a.startswith("PROTO_")):
             if getattr(self, p)==id:
-                return p
-    
+                return p   
+
+    def detect_peek_tls(self, sock):
+        if sock.socket_ssl:
+            raise Exception("SSL Detection for ssl socket ..whut!")
+        TLS_VERSIONS = {
+            # SSL
+            '\x00\x02':"SSL_2_0",
+            '\x03\x00':"SSL_3_0",
+            # TLS
+            '\x03\x01':"TLS_1_0",
+            '\x03\x02':"TLS_1_1",
+            '\x03\x03':"TLS_1_2",
+            '\x03\x03':"TLS_1_3",
+            }
+        TLS_CONTENT_TYPE_HANDSHAKE = '\x16'
+        SSLv2_PREAMBLE = 0x80
+        SSLv2_CONTENT_TYPE_CLIENT_HELLO ='\x01'
+        peek_bytes = sock.recv(5, socket.MSG_PEEK)
+        if not len(peek_bytes)==5:
+            return
+        # detect sslv2, sslv3, tls: one char a byte; T .. type, L .. length, V .. version
+        #               01234
+        # detect sslv2  LLTVV                T=0x01 ... MessageType.client_hello; L high bit being set.
+        #        sslv3  TVVLL      
+        #        tls    TVVLL                T=0x16 ... ContentType.Handshake
+        if ord(peek_bytes[0]) & SSLv2_PREAMBLE \
+            and peek_bytes[2]==SSLv2_CONTENT_TYPE_CLIENT_HELLO \
+            and peek_bytes[3:3+1] == '\x00\x02':
+            v = TLS_VERSIONS.get(peek_bytes[3:3+1])
+            logger.info("ProtocolDetect: SSL/TLS version: %s"%v)
+            return v
+        elif peek_bytes[0] == TLS_CONTENT_TYPE_HANDSHAKE \
+            and peek_bytes[1:1+2] in TLS_VERSIONS.keys():
+            v = TLS_VERSIONS.get(peek_bytes[1:1+2])
+            logger.info("ProtocolDetect: SSL/TLS version: %s"%v)
+            return v
+        return
+            
+
     def detect(self, data):
         if self.protocol_id:
             return self.protocol_id
@@ -174,13 +213,14 @@ class Session(object):
         @param target: target tuple ('ip',port) 
         @param buffer_size: socket buff size'''
     
-    def __init__(self, proxy, inbound=None, outbound=None, target=None, buffer_size=4096):
+    def __init__(self, proxy, inbound=None, outbound=None, target=None, buffer_size=4096, intercept_ssl=True):
         self.proxy = proxy
         self.bind = proxy.getsockname()
         self.inbound = TcpSockBuff(inbound)
         self.outbound = TcpSockBuff(outbound, peer=target)
         self.buffer_size = buffer_size
         self.protocol = ProtocolDetect(target=target)
+        self.intercept_ssl = intercept_ssl
         self.datastore = {}
     
     def __repr__(self):
@@ -201,7 +241,7 @@ class Session(object):
         self.inbound = TcpSockBuff(sock)
         self.inbound.peer = addr
         logger.info("%s client %s has connected"%(self,repr(self.inbound.peer)))
-        return sock,
+        return sock,addr
     
     def get_peer_sockets(self):
         return [self.inbound.socket, self.outbound.socket]
@@ -229,6 +269,10 @@ class Session(object):
         raise SessionTerminatedException()
     
     def on_recv(self, s_in, s_out, session):
+        if self.intercept_ssl and not s_in.socket_ssl:
+            ssl_version = self.protocol.detect_peek_tls(s_in)
+            if ssl_version:
+                self.on_recv_ssl_detected(ssl_version, s_in, session)
         data = s_in.recv(session.buffer_size)
         self.protocol.detect(data)
         if not len(data):
@@ -241,6 +285,19 @@ class Session(object):
             s_out.sendall(data)
         return data
     
+    def on_recv_ssl_detected(self, ssl_version, sock, session):
+        if not sock == self.inbound:
+            raise Exception("thats strange!")
+        logger.info("SSL Handshake detected - performing ssl/tls conversion")
+        try:
+            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
+                                    keyfile=Vectors._TLS_KEYFILE)
+            self.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+            self.outbound.ssl_wrap_socket_with_context(context, server_side=False)
+        except Exception, e:
+            logger.warning("Exception - not ssl intercepting - %s"%repr(e))
+    
     def inbound_starttls(self, session, sslctx=None): 
         raise NotImplementedError("Implement this in proto class")
     def outbound_starttls(self, session, sslctx=None): 
@@ -252,7 +309,7 @@ class Session(object):
 class ProxyServer(object):
     '''Proxy Class'''
     
-    def __init__(self, listen, target, buffer_size=4096, delay=0.0001):
+    def __init__(self, listen, target, buffer_size=4096, delay=0.0001, intercept_ssl=True):
         self.input_list = set([])
         self.sessions = {}  # sock:Session()
         self.callbacks = {} # name: [f,..]
@@ -262,6 +319,7 @@ class ProxyServer(object):
         #
         self.buffer_size = buffer_size
         self.delay = delay
+        self.intercept_ssl = intercept_ssl
         self.bind = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.bind.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.bind.bind(listen)
@@ -292,7 +350,7 @@ class ProxyServer(object):
                 try:
                     if sock == self.bind:
                         # on_accept
-                        session = Session(sock, target=self.target)
+                        session = Session(sock, target=self.target, intercept_ssl=self.intercept_ssl)
                         for k,v in self.callbacks.iteritems():
                             setattr(session, k, v)
                         session.notify_read(sock)
@@ -335,6 +393,19 @@ class ProxyServer(object):
 class Vectors:
     _TLS_CERTFILE = "server.pem"
     _TLS_KEYFILE = "server.pem"
+    class ANY:
+        _PROTO_ID = -1
+        class Proxy:
+            '''
+            just a TCP Proxy - may be combinde with --generic-ssl-interception
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite):
+                return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite):
+                return data
+            
     class SMTP:
         _PROTO_ID = 25
         class StripFromCapabilities:
@@ -1351,7 +1422,10 @@ def main():
     parser.add_option("-l", "--listen", dest="listen", help="listen ip:port [default: 0.0.0.0:<remote_port>]")
     parser.add_option("-r", "--remote", dest="remote", help="remote target ip:port to forward sessions to")
     parser.add_option("-k", "--key", dest="key", default="server.pem", help="SSL Certificate and Private key file to use, PEM format assumed [default: %default]")
-    
+    parser.add_option("-s", "--generic-ssl-interception",
+                  action="store_true", dest="intercept_ssl", default=False,
+                  help="dynamically intercept SSL/TLS")
+        
     all_vectors = []
     for proto in (v for v in dir(Vectors) if not v.startswith("_")):
         for test in (v for v in dir(getattr(Vectors,proto)) if not v.startswith("_")):
@@ -1391,7 +1465,7 @@ def main():
     Vectors._TLS_CERTFILE = Vectors._TLS_KEYFILE = options.key
           
     # ---- start up engines ----
-    prx = ProxyServer(listen=options.listen, target=options.remote, buffer_size=4096, delay=0.00001)
+    prx = ProxyServer(listen=options.listen, target=options.remote, buffer_size=4096, delay=0.00001, intercept_ssl=options.intercept_ssl)
     logger.info("%s ready."%prx)
     rewrite = RewriteDispatcher()
     
