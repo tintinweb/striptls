@@ -169,7 +169,7 @@ class ProtocolDetect(object):
             '\x03\x01':"TLS_1_0",
             '\x03\x02':"TLS_1_1",
             '\x03\x03':"TLS_1_2",
-            '\x03\x03':"TLS_1_3",
+            '\x03\x04':"TLS_1_3",
             }
         TLS_CONTENT_TYPE_HANDSHAKE = '\x16'
         SSLv2_PREAMBLE = 0x80
@@ -213,14 +213,13 @@ class Session(object):
         @param target: target tuple ('ip',port) 
         @param buffer_size: socket buff size'''
     
-    def __init__(self, proxy, inbound=None, outbound=None, target=None, buffer_size=4096, intercept_ssl=True):
+    def __init__(self, proxy, inbound=None, outbound=None, target=None, buffer_size=4096):
         self.proxy = proxy
         self.bind = proxy.getsockname()
         self.inbound = TcpSockBuff(inbound)
         self.outbound = TcpSockBuff(outbound, peer=target)
         self.buffer_size = buffer_size
         self.protocol = ProtocolDetect(target=target)
-        self.intercept_ssl = intercept_ssl
         self.datastore = {}
     
     def __repr__(self):
@@ -252,6 +251,7 @@ class Session(object):
             self.connect(self.outbound.peer)
         elif sock == self.inbound.socket:
             # new client -> prxy - data
+            self.on_recv_peek(self.inbound, self)
             self.on_recv(self.inbound, self.outbound, self)
         elif sock == self.outbound.socket:
             # new sprxy <- target - data
@@ -269,10 +269,6 @@ class Session(object):
         raise SessionTerminatedException()
     
     def on_recv(self, s_in, s_out, session):
-        if self.intercept_ssl and not s_in.socket_ssl:
-            ssl_version = self.protocol.detect_peek_tls(s_in)
-            if ssl_version:
-                self.on_recv_ssl_detected(ssl_version, s_in, session)
         data = s_in.recv(session.buffer_size)
         self.protocol.detect(data)
         if not len(data):
@@ -285,31 +281,14 @@ class Session(object):
             s_out.sendall(data)
         return data
     
-    def on_recv_ssl_detected(self, ssl_version, sock, session):
-        if not sock == self.inbound:
-            raise Exception("thats strange!")
-        logger.info("SSL Handshake detected - performing ssl/tls conversion")
-        try:
-            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
-                                    keyfile=Vectors._TLS_KEYFILE)
-            self.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-            self.outbound.ssl_wrap_socket_with_context(context, server_side=False)
-        except Exception, e:
-            logger.warning("Exception - not ssl intercepting - %s"%repr(e))
-    
-    def inbound_starttls(self, session, sslctx=None): 
-        raise NotImplementedError("Implement this in proto class")
-    def outbound_starttls(self, session, sslctx=None): 
-        raise NotImplementedError("Implement this in proto class")
-    
+    def on_recv_peek(self, s_in, session): pass
     def mangle_client_data(self, session, data, rewrite): return data
     def mangle_server_data(self, session, data, rewrite): return data
     
 class ProxyServer(object):
     '''Proxy Class'''
     
-    def __init__(self, listen, target, buffer_size=4096, delay=0.0001, intercept_ssl=True):
+    def __init__(self, listen, target, buffer_size=4096, delay=0.0001):
         self.input_list = set([])
         self.sessions = {}  # sock:Session()
         self.callbacks = {} # name: [f,..]
@@ -319,7 +298,6 @@ class ProxyServer(object):
         #
         self.buffer_size = buffer_size
         self.delay = delay
-        self.intercept_ssl = intercept_ssl
         self.bind = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.bind.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.bind.bind(listen)
@@ -350,7 +328,7 @@ class ProxyServer(object):
                 try:
                     if sock == self.bind:
                         # on_accept
-                        session = Session(sock, target=self.target, intercept_ssl=self.intercept_ssl)
+                        session = Session(sock, target=self.target)
                         for k,v in self.callbacks.iteritems():
                             setattr(session, k, v)
                         session.notify_read(sock)
@@ -393,18 +371,57 @@ class ProxyServer(object):
 class Vectors:
     _TLS_CERTFILE = "server.pem"
     _TLS_KEYFILE = "server.pem"
-    class ANY:
-        _PROTO_ID = -1
-        class Proxy:
+    
+    class GENERIC:
+        _PROTO_ID = None
+        class Intercept:
             '''
-            just a TCP Proxy - may be combinde with --generic-ssl-interception
+            proto independent msg_peek based tls interception
             '''
             @staticmethod
-            def mangle_server_data(session, data, rewrite):
-                return data
+            def mangle_server_data(session, data, rewrite): return data
             @staticmethod
-            def mangle_client_data(session, data, rewrite):
-                return data
+            def mangle_client_data(session, data, rewrite): return data
+            @staticmethod
+            def on_recv_peek(session, s_in):
+                if s_in.socket_ssl:
+                    return
+
+                ssl_version = session.protocol.detect_peek_tls(s_in)
+                if ssl_version:
+                    logger.info("SSL Handshake detected - performing ssl/tls conversion")
+                    try:
+                        context = Vectors.GENERIC.Intercept.create_ssl_context()
+                        context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
+                                                keyfile=Vectors._TLS_KEYFILE)
+                        session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                        logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                        session.outbound.ssl_wrap_socket_with_context(context, server_side=False)
+                        logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    except Exception, e:
+                        logger.warning("Exception - not ssl intercepting - %s"%repr(e))
+                
+            @staticmethod
+            def create_ssl_context(proto=ssl.PROTOCOL_SSLv23, 
+                                   verify_mode=ssl.CERT_NONE,
+                                   protocols=None,
+                                   options=None,
+                                   ciphers="ALL"):
+                protocols = protocols or ('PROTOCOL_SSLv3','PROTOCOL_TLSv1',
+                                          'PROTOCOL_TLSv1_1','PROTOCOL_TLSv1_2')
+                options = options or ('OP_CIPHER_SERVER_PREFERENCE','OP_SINGLE_DH_USE',
+                                      'OP_SINGLE_ECDH_USE','OP_NO_COMPRESSION')
+                context = ssl.SSLContext(proto)
+                context.verify_mode = verify_mode
+                # reset protocol, options
+                context.protocol = 0
+                context.options = 0
+                for p in protocols:
+                    context.protocol |= getattr(ssl, p, 0)
+                for o in options:
+                    context.options |= getattr(ssl, o, 0)
+                context.set_ciphers(ciphers)
+                return context
             
     class SMTP:
         _PROTO_ID = 25
@@ -497,7 +514,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("220 Go ahead\r\n")
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("220 Go ahead\r\n")))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -555,7 +572,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("220 Go ahead\r\n")
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("220 Go ahead\r\n")))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -664,7 +681,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("+OK Begin TLS negotiation\r\n")
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("+OK Begin TLS negotiation\r\n")))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_CERTFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -758,7 +775,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("%s OK Begin TLS negotation now\r\n"%id)
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("%s OK Begin TLS negotation now\r\n"%id)))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_CERTFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -834,7 +851,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("234 OK Begin TLS negotation now\r\n")
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("234 OK Begin TLS negotation now\r\n")))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -909,7 +926,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("382 Continue with TLS negotiation\r\n")
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("382 Continue with TLS negotiation\r\n")))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -1007,7 +1024,7 @@ class Vectors:
                     # do inbound STARTTLS
                     session.inbound.sendall("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -1085,7 +1102,7 @@ class Vectors:
                     id = data.split(' ',1)[0].strip()
                     session.inbound.sendall('%s OK "Begin TLS negotiation now"'%id)
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr('%s OK "Begin TLS negotiation now"'%id)))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -1290,7 +1307,7 @@ class Vectors:
                             pass
                     session.inbound.sendall(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)
                     logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)))
-                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
                     logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
@@ -1316,13 +1333,14 @@ class Vectors:
 
 
 class RewriteDispatcher(object):
-    def __init__(self):
+    def __init__(self, generic_tls_intercept=False):
         self.vectors = {}   # proto:[vectors]
         self.results = []   # [ {session,client_ip,mangle,result}, }
         self.session_to_mangle = {}  # session:mangle
+        self.generic_tls_intercept = generic_tls_intercept
         
     def __repr__(self):
-        return "<RewriteDispatcher vectors=%s>"%repr(self.vectors)
+        return "<RewriteDispatcher ssl/tls_intercept=%s vectors=%s>"%(self.generic_tls_intercept, repr(self.vectors))
     
     def get_results(self):
         return self.results
@@ -1407,8 +1425,14 @@ class RewriteDispatcher(object):
             logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
         return data
     
+    def on_recv_peek(self, s_in, session):
+        if self.generic_tls_intercept:
+            # forced by cmdline-option
+            return Vectors.GENERIC.Intercept.on_recv_peek(session, s_in)
+        elif hasattr(self.get_mangle(session), "on_recv_peek"):
+            return self.get_mangle(session).on_recv_peek(session, s_in)
+    
 def main():
-    import os
     from optparse import OptionParser
     ret = 0
     usage = """usage: %prog [options]
@@ -1416,15 +1440,16 @@ def main():
        example: %prog --listen 0.0.0.0:25 --remote mail.server.tld:25 
     """
     parser = OptionParser(usage=usage)
-    parser.add_option("-v", "--verbose",
+    parser.add_option("-q", "--quiet",
                   action="store_true", dest="verbose", default=True,
-                  help="make lots of noise [default]")
+                  help="be quiet [default: %default]")
     parser.add_option("-l", "--listen", dest="listen", help="listen ip:port [default: 0.0.0.0:<remote_port>]")
     parser.add_option("-r", "--remote", dest="remote", help="remote target ip:port to forward sessions to")
     parser.add_option("-k", "--key", dest="key", default="server.pem", help="SSL Certificate and Private key file to use, PEM format assumed [default: %default]")
-    parser.add_option("-s", "--generic-ssl-interception",
-                  action="store_true", dest="intercept_ssl", default=False,
+    parser.add_option("-s", "--generic-ssl-intercept",
+                  action="store_true", dest="generic_tls_intercept", default=False,
                   help="dynamically intercept SSL/TLS")
+    parser.add_option("-b", "--bufsiz", dest="buffer_size", type="int", default=4096)
         
     all_vectors = []
     for proto in (v for v in dir(Vectors) if not v.startswith("_")):
@@ -1432,7 +1457,7 @@ def main():
             all_vectors.append("%s.%s"%(proto,test))
     parser.add_option("-x", "--vectors",
                   default="ALL",
-                  help="Comma separated list of vectors. Use 'ALL' (default) to select all vectors. Available vectors: "+", ".join(all_vectors)+""
+                  help="Comma separated list of vectors. Use 'ALL' (default) to select all vectors, 'NONE' for tcp/ssl proxy mode. Available vectors: "+", ".join(all_vectors)+""
                   " [default: %default]")
     # parse args
     (options, args) = parser.parse_args()
@@ -1460,14 +1485,17 @@ def main():
         options.listen = (options.listen.strip(), options.remote[1])
         logger.warning("no listen port specified - falling back to %s:%d (remote port)"%options.listen)
     options.vectors = [o.strip() for o in options.vectors.strip().split(",")]
-    if "ALL" in options.vectors:
+    if 'ALL' in (v.upper() for v in options.vectors):
         options.vectors = all_vectors
+    elif 'NONE' in (v.upper() for v in options.vectors):
+        options.vectors = []
     Vectors._TLS_CERTFILE = Vectors._TLS_KEYFILE = options.key
           
     # ---- start up engines ----
-    prx = ProxyServer(listen=options.listen, target=options.remote, buffer_size=4096, delay=0.00001, intercept_ssl=options.intercept_ssl)
+    prx = ProxyServer(listen=options.listen, target=options.remote, 
+                      buffer_size=options.buffer_size, delay=0.00001)
     logger.info("%s ready."%prx)
-    rewrite = RewriteDispatcher()
+    rewrite = RewriteDispatcher(generic_tls_intercept=options.generic_tls_intercept)
     
     for classname in options.vectors:
         try:
@@ -1475,13 +1503,15 @@ def main():
             cls_proto = getattr(globals().get("Vectors"),proto)
             cls_vector = getattr(cls_proto, vector)
             rewrite.add(cls_proto._PROTO_ID, cls_vector)
-            logger.debug("* added test (port:%-5d, proto:%8s): %s"%(cls_proto._PROTO_ID, proto, repr(cls_vector)))
+            logger.debug("* added vector (port:%-5s, proto:%8s): %s"%(cls_proto._PROTO_ID, proto, repr(cls_vector)))
         except Exception, e:
+            logger.error("* error - failed to add: %s"%classname)
             raise e
 
-    logging.info( repr(rewrite))
+    logging.info(repr(rewrite))
     prx.set_callback("mangle_server_data", rewrite.mangle_server_data)
     prx.set_callback("mangle_client_data", rewrite.mangle_client_data)
+    prx.set_callback("on_recv_peek", rewrite.on_recv_peek)
     try:
         prx.main_loop()
     except KeyboardInterrupt:
