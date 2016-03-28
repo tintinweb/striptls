@@ -3,7 +3,7 @@
 poc implementation of STARTTLS stripping attacks
 
 * GENERIC
- * Intercept - protocol independent ssl/tls interception. peeks for TLS handshakes and transparently converts socket to tls.
+ * Intercept - protocol independent ssl/tls interception. peeks for TLS Handshake, converts socket to tls.
 * SMTP
  * SMTP.StripFromCapabilities - server response capability patch
  * SMTP.StripWithInvalidResponseCode - client STARTTLS stripping, invalid response code
@@ -153,19 +153,15 @@ detect and convert feature.
 	- INFO     - <Session 0x1f10110> connecting to target ('mail.gmx.com', 25)
 	- DEBUG    - <Session 0x1f10110> [client] <= [server]          '220 gmx.com (mrgmx101) Nemesis ESMTP Service ready\r\n'
 	- DEBUG    - <Session 0x1f10110> [client] => [server]          'EHLO openssl.client.net\r\n'
-	- DEBUG    - <Session 0x1f10110> [client] <= [server]          '250-gmx.com Hello openssl.client.net [xxx.xxx.xxx.xxx]\r\n250-SIZ
-	E 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
+	- DEBUG    - <Session 0x1f10110> [client] <= [server]          '250-gmx.com Hello openssl.client.net [xxx.xxx.xxx.xxx]\r\n250-SIZE 31457280\r\n250-AUTH LOGIN PLAIN\r\n250 STARTTLS\r\n'
 	- DEBUG    - <Session 0x1f10110> [client] => [server]          'STARTTLS\r\n'
 	- DEBUG    - <Session 0x1f10110> [client] <= [server]          '220 OK\r\n'
 	- INFO     - ProtocolDetect: SSL/TLS version: TLS_1_0
 	- INFO     - SSL Handshake detected - performing ssl/tls conversion
-	- DEBUG    - <Session 0x1f10110> [client] <> [      ]          SSL handshake done: ('ECDHE-RSA-AES256-GCM-SHA384', 'TLSv1/SSLv
-	3', 256)
-	- DEBUG    - <Session 0x1f10110> [      ] <> [server]          SSL handshake done: ('DHE-RSA-AES256-GCM-SHA384', 'TLSv1/SSLv3'
-	, 256)
+	- DEBUG    - <Session 0x1f10110> [client] <> [      ]          SSL handshake done: ('ECDHE-RSA-AES256-GCM-SHA384', 'TLSv1/SSLv3', 256)
+	- DEBUG    - <Session 0x1f10110> [      ] <> [server]          SSL handshake done: ('DHE-RSA-AES256-GCM-SHA384', 'TLSv1/SSLv3', 256)
 	- DEBUG    - <Session 0x1f10110> [client] => [server]          'EHLO A\r\n'
-	- DEBUG    - <Session 0x1f10110> [client] <= [server]          '250-gmx.com Hello A [xxx.xxx.xxx.xxx]\r\n250-SIZE 69920427\r\n250
-	 AUTH LOGIN PLAIN\r\n'
+	- DEBUG    - <Session 0x1f10110> [client] <= [server]          '250-gmx.com Hello A [xxx.xxx.xxx.xxx]\r\n250-SIZE 69920427\r\n250AUTH LOGIN PLAIN\r\n'
 
 ### Audit Mode
 
