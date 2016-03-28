@@ -174,26 +174,28 @@ class ProtocolDetect(object):
         TLS_CONTENT_TYPE_HANDSHAKE = '\x16'
         SSLv2_PREAMBLE = 0x80
         SSLv2_CONTENT_TYPE_CLIENT_HELLO ='\x01'
+        
         peek_bytes = sock.recv(5, socket.MSG_PEEK)
         if not len(peek_bytes)==5:
             return
-        # detect sslv2, sslv3, tls: one char a byte; T .. type, L .. length, V .. version
+        # detect sslv2, sslv3, tls: one symbol is one byte;  T .. type
+        #                                                    L .. length 
+        #                                                    V .. version
         #               01234
-        # detect sslv2  LLTVV                T=0x01 ... MessageType.client_hello; L high bit being set.
+        # detect sslv2  LLTVV                T=0x01 ... MessageType.client_hello; L high bit set.
         #        sslv3  TVVLL      
         #        tls    TVVLL                T=0x16 ... ContentType.Handshake
+        v = None
         if ord(peek_bytes[0]) & SSLv2_PREAMBLE \
             and peek_bytes[2]==SSLv2_CONTENT_TYPE_CLIENT_HELLO \
             and peek_bytes[3:3+1] == '\x00\x02':
             v = TLS_VERSIONS.get(peek_bytes[3:3+1])
-            logger.info("ProtocolDetect: SSL/TLS version: %s"%v)
-            return v
         elif peek_bytes[0] == TLS_CONTENT_TYPE_HANDSHAKE \
             and peek_bytes[1:1+2] in TLS_VERSIONS.keys():
-            v = TLS_VERSIONS.get(peek_bytes[1:1+2])
+            v = TLS_VERSIONS.get(peek_bytes[1:1+2])  
+        if v:
             logger.info("ProtocolDetect: SSL/TLS version: %s"%v)
-            return v
-        return
+        return v
             
 
     def detect(self, data):
