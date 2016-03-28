@@ -143,7 +143,7 @@ class ProtocolDetect(object):
         if target:
             self.protocol_id = self.PORTMAP.get(target[1])
             if self.protocol_id:
-                logging.debug("%s - protocol detected (target port)"%repr(self))
+                logger.debug("%s - protocol detected (target port)"%repr(self))
     
     def __str__(self):
         return repr(self.proto_id_to_name(self.protocol_id))
@@ -203,7 +203,7 @@ class ProtocolDetect(object):
         for keywordlist,proto in self.KEYWORDS:
             if any(k in data.lower() for k in keywordlist):
                 self.protocol_id = proto
-                logging.debug("%s - protocol detected (protocol messages)"%repr(self))
+                logger.debug("%s - protocol detected (protocol messages)"%repr(self))
                 return
         
 class Session(object):
@@ -395,9 +395,9 @@ class Vectors:
                         context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
                                                 keyfile=Vectors._TLS_KEYFILE)
                         session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                        logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                        logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                         session.outbound.ssl_wrap_socket_with_context(context, server_side=False)
-                        logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                        logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
                     except Exception, e:
                         logger.warning("Exception - not ssl intercepting - %s"%repr(e))
                 
@@ -462,7 +462,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     session.inbound.sendall("200 STRIPTLS\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("200 STRIPTLS\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("200 STRIPTLS\r\n")))
                     data=None
                 elif "mail from" in data.lower():
                     rewrite.set_result(session, True)
@@ -478,7 +478,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     session.inbound.sendall("454 TLS not available due to temporary reason\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("454 TLS not available due to temporary reason\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("454 TLS not available due to temporary reason\r\n")))
                     data=None
                 elif "mail from" in data.lower():
                     rewrite.set_result(session, True)
@@ -494,7 +494,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     session.inbound.sendall("501 Syntax error\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("501 Syntax error\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("501 Syntax error\r\n")))
                     data=None
                 elif "mail from" in data.lower():
                     rewrite.set_result(session, True)
@@ -513,24 +513,24 @@ class Vectors:
                 if "STARTTLS" in data:
                     # do inbound STARTTLS
                     session.inbound.sendall("220 Go ahead\r\n")
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("220 Go ahead\r\n")))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("220 Go ahead\r\n")))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     
                     # outbound ssl
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if "220" not in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()    
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
                     
                     data=None
                 elif "mail from" in data.lower():
@@ -571,20 +571,20 @@ class Vectors:
                 if "STARTTLS" in data:
                     # do inbound STARTTLS
                     session.inbound.sendall("220 Go ahead\r\n")
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("220 Go ahead\r\n")))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("220 Go ahead\r\n")))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # inbound ssl, fake server ehlo on helo/ehlo
                     indata = session.inbound.recv_blocked()
                     if not any(e in indata for e in ('ehlo','helo')):
                        raise ProtocolViolationException("whoop!? client did not send EHLO/HELO after STARTTLS finished.. proto violation: %s"%repr(indata))
-                    logging.debug("%s [client] => [      ][mangled] %s"%(session,repr(indata)))
+                    logger.debug("%s [client] => [      ][mangled] %s"%(session,repr(indata)))
                     session.inbound.sendall(session.datastore["server_ehlo_stripped"])
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr(session.datastore["server_ehlo_stripped"])))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr(session.datastore["server_ehlo_stripped"])))
                     data=None
                 elif any(e in data for e in ('ehlo','helo')) and session.datastore.get("server_ehlo_stripped"):
                     # just do not forward the second ehlo/helo
@@ -603,7 +603,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if data.lower().startswith("ehlo "):
                     session.inbound.sendall("502 Error: command \"EHLO\" not implemented\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Error: command \"EHLO\" not implemented\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Error: command \"EHLO\" not implemented\r\n")))
                     data=None
                 elif "mail from" in data.lower():
                     rewrite.set_result(session, True)
@@ -620,7 +620,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     data += "INJECTED_INVALID_COMMAND\r\n"
-                    #logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
+                    #logger.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
                     try:
                         Vectors.SMTP.UntrustedIntercept.mangle_client_data(session, data, rewrite)
                     except ssl.SSLEOFError, se:
@@ -661,7 +661,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "stls" == data.strip().lower():
                     session.inbound.sendall("-ERR unknown command\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("-ERR unknown command\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("-ERR unknown command\r\n")))
                     data=None
                 elif any(c in data.lower() for c in ('list','user ','pass ')):
                     rewrite.set_result(session, True)
@@ -680,25 +680,25 @@ class Vectors:
                 if "stls"==data.strip().lower():
                     # do inbound STARTTLS
                     session.inbound.sendall("+OK Begin TLS negotiation\r\n")
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("+OK Begin TLS negotiation\r\n")))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("+OK Begin TLS negotiation\r\n")))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_CERTFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # outbound ssl
                     
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if "+OK" not in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
     
                     data=None
                 elif any(c in data.lower() for c in ('list','user ','pass ')):
@@ -736,7 +736,7 @@ class Vectors:
                 if data.strip().lower().endswith("starttls"):
                     id = data.split(' ',1)[0].strip()
                     session.inbound.sendall("%s BAD unknown command\r\n"%id)
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s BAD unknown command\r\n"%id)))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("%s BAD unknown command\r\n"%id)))
                     data=None
                 elif " LOGIN " in data:
                     rewrite.set_result(session, True)
@@ -749,7 +749,7 @@ class Vectors:
             def mangle_server_data(session, data, rewrite):
                 if all(kw.lower() in data.lower() for kw in ("IMAP4","* OK ")):
                     session.inbound.sendall("OK IMAP2 Server Ready\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("OK IMAP2 Server Ready\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("OK IMAP2 Server Ready\r\n")))
                     data=None
                 return data
             @staticmethod
@@ -774,26 +774,26 @@ class Vectors:
                     id = data.split(' ',1)[0].strip()
                     # do inbound STARTTLS
                     session.inbound.sendall("%s OK Begin TLS negotation now\r\n"%id)
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("%s OK Begin TLS negotation now\r\n"%id)))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("%s OK Begin TLS negotation now\r\n"%id)))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_CERTFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
     
                     # outbound ssl
                     
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if "%s OK"%id not in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
     
                     data=None
                 elif " LOGIN " in data:
@@ -831,7 +831,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "AUTH TLS" in data:
                     session.inbound.sendall("500 AUTH TLS not understood\r\n")
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("500 AUTH TLS not understood\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("500 AUTH TLS not understood\r\n")))
                     data=None
                 elif "USER " in data:
                     rewrite.set_result(session, True)
@@ -850,25 +850,25 @@ class Vectors:
                 if "AUTH TLS" in data:
                     # do inbound STARTTLS
                     session.inbound.sendall("234 OK Begin TLS negotation now\r\n")
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("234 OK Begin TLS negotation now\r\n")))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("234 OK Begin TLS negotation now\r\n")))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # outbound ssl
                     
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if not resp_data.startswith("234"):
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
     
                     data=None
                 elif "USER " in data:
@@ -906,7 +906,7 @@ class Vectors:
             def mangle_client_data(session, data, rewrite):
                 if "STARTTLS" in data:
                     session.inbound.sendall("502 Command unavailable\r\n")  # or 580 Can not initiate TLS negotiation
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Command unavailable\r\n")))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("502 Command unavailable\r\n")))
                     data=None
                 elif "GROUP " in data:
                     rewrite.set_result(session, True)
@@ -925,25 +925,25 @@ class Vectors:
                 if "STARTTLS" in data:
                     # do inbound STARTTLS
                     session.inbound.sendall("382 Continue with TLS negotiation\r\n")
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("382 Continue with TLS negotiation\r\n")))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("382 Continue with TLS negotiation\r\n")))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # outbound ssl
                     
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if not resp_data.startswith("382"):
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
                                   
                     data=None
                 elif "GROUP " in data:
@@ -989,12 +989,12 @@ class Vectors:
                     if "required" in starttls_args:
                         # do outbound starttls as required by server
                         session.outbound.sendall("<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
-                        logging.debug("%s [client] => [server][mangled] %s"%(session,repr("<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
+                        logger.debug("%s [client] => [server][mangled] %s"%(session,repr("<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
                         resp_data = session.outbound.recv_blocked()
                         if not resp_data.startswith("<proceed "):
                             raise ProtocolViolationException("whoop!? server announced STARTTLS *required* but fails to proceed.  proto violation: %s"%repr(resp_data))
 
-                        logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                        logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                         session.outbound.ssl_wrap_socket()
 
                 return data
@@ -1023,25 +1023,25 @@ class Vectors:
                 if "<starttls " in data:
                     # do inbound STARTTLS
                     session.inbound.sendall("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # outbound ssl
 
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if not resp_data.startswith("<proceed "):
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
 
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
 
                     data=None
                 elif "</auth>" in data:
@@ -1081,7 +1081,7 @@ class Vectors:
                 if " STARTTLS" in data:
                     id = data.split(' ',1)[0].strip()
                     session.inbound.sendall('%s BAD "command unknown or arguments invalid"'%id)  # or 580 Can not initiate TLS negotiation
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr('%s BAD "command unknown or arguments invalid"'%id)))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr('%s BAD "command unknown or arguments invalid"'%id)))
                     data=None
                 elif " AUTHENTICATE " in data:
                     rewrite.set_result(session, True)
@@ -1101,25 +1101,25 @@ class Vectors:
                     # do inbound STARTTLS
                     id = data.split(' ',1)[0].strip()
                     session.inbound.sendall('%s OK "Begin TLS negotiation now"'%id)
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr('%s OK "Begin TLS negotiation now"'%id)))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr('%s OK "Begin TLS negotiation now"'%id)))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # outbound ssl
                     
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if not " OK " in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
     
                     data=None
                 elif " AUTHENTICATE " in data:
@@ -1191,7 +1191,7 @@ class Vectors:
                         except IndexError:
                             pass
                     session.inbound.sendall("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 691 %(nickname)s :%(cmd)s\r\n"%params)))
                     data=None
                 elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
@@ -1222,7 +1222,7 @@ class Vectors:
                         except IndexError:
                             pass
                     session.inbound.sendall("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
                     data=None
                 elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
@@ -1253,7 +1253,7 @@ class Vectors:
                         except IndexError:
                             pass
                     session.inbound.sendall("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)
-                    logging.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
+                    logger.debug("%s [client] <= [server][mangled] %s"%(session,repr("%(srv)s 451 %(nickname)s :%(cmd)s\r\n"%params)))
                     data=None
                 elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
                     rewrite.set_result(session, True)
@@ -1306,25 +1306,25 @@ class Vectors:
                         except IndexError:
                             pass
                     session.inbound.sendall(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)
-                    logging.debug("%s [client] <= [      ][mangled] %s"%(session,repr(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)))
+                    logger.debug("%s [client] <= [      ][mangled] %s"%(session,repr(":%(srv)s 670 %(nickname)s :STARTTLS successful, go ahead with TLS handshake\r\n"%params)))
                     context = Vectors.GENERIC.Intercept.create_ssl_context()
                     context.load_cert_chain(certfile=Vectors._TLS_CERTFILE, 
                                             keyfile=Vectors._TLS_KEYFILE)
-                    logging.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
+                    logger.debug("%s [client] <= [      ][mangled] waiting for inbound SSL handshake"%(session))
                     session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
-                    logging.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
                     # outbound ssl
                     
                     session.outbound.sendall(data)
-                    logging.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
+                    logger.debug("%s [      ] => [server][mangled] %s"%(session,repr(data)))
                     resp_data = session.outbound.recv_blocked()
-                    logging.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
+                    logger.debug("%s [      ] <= [server][mangled] %s"%(session,repr(resp_data)))
                     if not " 670 " in resp_data:
                         raise ProtocolViolationException("whoop!? client sent STARTTLS even though we did not announce it.. proto violation: %s"%repr(resp_data))
                     
-                    logging.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
+                    logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                     session.outbound.ssl_wrap_socket()
-                    logging.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
+                    logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
     
                     data=None
                 elif any(kw.lower() in data.lower() for kw in ('authenticate ','privmsg ', 'protoctl ')):
@@ -1408,21 +1408,21 @@ class RewriteDispatcher(object):
         
     def mangle_server_data(self, session, data):
         data_orig = data
-        logging.debug("%s [client] <= [server]          %s"%(session,repr(data)))
+        logger.debug("%s [client] <= [server]          %s"%(session,repr(data)))
         if self.get_mangle(session):
             data = self.get_mangle(session).mangle_server_data(session, data, self)
         if data!=data_orig:
-            logging.debug("%s [client] <= [server][mangled] %s"%(session,repr(data)))
+            logger.debug("%s [client] <= [server][mangled] %s"%(session,repr(data)))
         return data
 
     def mangle_client_data(self, session, data):
         data_orig = data
-        logging.debug("%s [client] => [server]          %s"%(session,repr(data)))
+        logger.debug("%s [client] => [server]          %s"%(session,repr(data)))
         if self.get_mangle(session):
             #TODO: just use the first one for now
             data = self.get_mangle(session).mangle_client_data(session, data, self)
         if data!=data_orig:
-            logging.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
+            logger.debug("%s [client] => [server][mangled] %s"%(session,repr(data)))
         return data
     
     def on_recv_peek(self, s_in, session):
@@ -1441,7 +1441,7 @@ def main():
     """
     parser = OptionParser(usage=usage)
     parser.add_option("-q", "--quiet",
-                  action="store_true", dest="verbose", default=True,
+                  action="store_false", dest="verbose", default=True,
                   help="be quiet [default: %default]")
     parser.add_option("-l", "--listen", dest="listen", help="listen ip:port [default: 0.0.0.0:<remote_port>]")
     parser.add_option("-r", "--remote", dest="remote", help="remote target ip:port to forward sessions to")
@@ -1462,8 +1462,8 @@ def main():
     # parse args
     (options, args) = parser.parse_args()
     # normalize args
-    if options.verbose:
-        logger.setLevel(logging.DEBUG)
+    if not options.verbose:
+        logger.setLevel(logging.INFO)
     if not options.remote:
         parser.error("mandatory option: remote")
     if ":" not in options.remote and ":" in options.listen:
