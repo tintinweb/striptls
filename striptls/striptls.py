@@ -1432,7 +1432,9 @@ class RewriteDispatcher(object):
         return mangle
         
     def get_mangles(self, proto):
-        return self.vectors.get(proto,[])
+        m = self.vectors.get(proto,set([]))
+        m.update(self.vectors.get(None,[]))
+        return m
         
     def mangle_server_data(self, session, data):
         data_orig = data
