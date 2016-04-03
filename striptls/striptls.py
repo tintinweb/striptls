@@ -33,7 +33,8 @@ class TcpSockBuff(object):
     def _init(self, sock):
         self.socket = sock
         
-    def connect(self, target):
+    def connect(self, target=None):
+        target = target or self.peer
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         return self.socket.connect(target)
     
@@ -188,13 +189,13 @@ class ProtocolDetect(object):
         v = None
         if ord(peek_bytes[0]) & SSLv2_PREAMBLE \
             and peek_bytes[2]==SSLv2_CONTENT_TYPE_CLIENT_HELLO \
-            and peek_bytes[3:3+1] == '\x00\x02':
-            v = TLS_VERSIONS.get(peek_bytes[3:3+1])
+            and peek_bytes[3:3+2] in TLS_VERSIONS.keys():
+            v = TLS_VERSIONS.get(peek_bytes[3:3+2])
+            logger.info("ProtocolDetect: SSL23/TLS version: %s"%v)
         elif peek_bytes[0] == TLS_CONTENT_TYPE_HANDSHAKE \
             and peek_bytes[1:1+2] in TLS_VERSIONS.keys():
             v = TLS_VERSIONS.get(peek_bytes[1:1+2])  
-        if v:
-            logger.info("ProtocolDetect: SSL/TLS version: %s"%v)
+            logger.info("ProtocolDetect: TLS version: %s"%v)
         return v
             
 
@@ -362,7 +363,7 @@ class ProxyServer(object):
                         except SessionTerminatedException: pass
                         self.input_list.difference_update(session.get_peer_sockets())
                     elif sock and sock!=self.bind:
-                        # exception for non-bind socket - probably fine to close and remove it from our list	
+                        # exception for non-bind socket - probably fine to close and remove it from our list
                         logger.error("main: removing socket that probably raised the exception")
                         sock.close()
                         self.input_list.remove(sock)
@@ -401,7 +402,7 @@ class Vectors:
                         session.outbound.ssl_wrap_socket_with_context(context, server_side=False)
                         logger.debug("%s [      ] <> [server]          SSL handshake done: %s"%(session, session.outbound.socket_ssl.cipher()))
                     except Exception, e:
-                        logger.warning("Exception - not ssl intercepting - %s"%repr(e))
+                        logger.warning("Exception - not ssl intercepting outbound: %s"%repr(e))
                 
             @staticmethod
             def create_ssl_context(proto=ssl.PROTOCOL_SSLv23, 
@@ -424,6 +425,31 @@ class Vectors:
                     context.options |= getattr(ssl, o, 0)
                 context.set_ciphers(ciphers)
                 return context
+                
+        class InterceptInbound:
+            '''
+            proto independent msg_peek based tls interception
+            '''
+            @staticmethod
+            def mangle_server_data(session, data, rewrite): return data
+            @staticmethod
+            def mangle_client_data(session, data, rewrite): return data
+            @staticmethod
+            def on_recv_peek(session, s_in):
+                if s_in.socket_ssl:
+                    return
+
+                ssl_version = session.protocol.detect_peek_tls(s_in)
+                if ssl_version:
+                    logger.info("SSL Handshake detected - performing ssl/tls conversion")
+                    try:
+                        context = Vectors.GENERIC.Intercept.create_ssl_context()
+                        context.load_cert_chain(certfile=Vectors._TLS_CERTFILE,
+                                                keyfile=Vectors._TLS_KEYFILE)
+                        session.inbound.ssl_wrap_socket_with_context(context, server_side=True)
+                        logger.debug("%s [client] <> [      ]          SSL handshake done: %s"%(session, session.inbound.socket_ssl.cipher()))
+                    except Exception, e:
+                        logger.warning("Exception - not ssl intercepting inbound: %s"%repr(e))
             
     class SMTP:
         _PROTO_ID = 25
@@ -1508,7 +1534,7 @@ def main():
             logger.debug("* added vector (port:%-5s, proto:%8s): %s"%(cls_proto._PROTO_ID, proto, repr(cls_vector)))
         except Exception, e:
             logger.error("* error - failed to add: %s"%classname)
-            raise e
+            parser.error("invalid vector: %s"%classname)
 
     logging.info(repr(rewrite))
     prx.set_callback("mangle_server_data", rewrite.mangle_server_data)
