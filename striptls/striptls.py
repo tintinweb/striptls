@@ -426,14 +426,27 @@ class Vectors:
                 context.set_ciphers(ciphers)
                 return context
                 
-        class InterceptInbound:
+        class InboundIntercept:
             '''
             proto independent msg_peek based tls interception
             '''
             @staticmethod
-            def mangle_server_data(session, data, rewrite): return data
+            def mangle_server_data(session, data, rewrite):
+                # peek again - make sure to check for inbound ssl connections
+                #  before forwarding data to the inbound channel
+                # just in case server is faster with answer than client with hello
+                #  likely if smtpd and striptls are running on the same segment
+                #  and client is not.
+                if not session.inbound.socket_ssl:
+                    # only peek if inbound is not in tls mode yet
+                    # kind of a hack but allow additional 0.1 secs for the client
+                    #  to send its hello
+                    time.sleep(0.1)
+                    Vectors.GENERIC.InterceptInbound.on_recv_peek(session, session.inbound)
+                return data
             @staticmethod
-            def mangle_client_data(session, data, rewrite): return data
+            def mangle_client_data(session, data, rewrite): 
+                return data
             @staticmethod
             def on_recv_peek(session, s_in):
                 if s_in.socket_ssl:

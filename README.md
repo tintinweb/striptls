@@ -3,7 +3,8 @@
 poc implementation of STARTTLS stripping attacks
 
 * GENERIC
- * Intercept - protocol independent ssl/tls interception. peeks for TLS Handshake, converts socket to tls.
+ * Intercept - protocol independent ssl/tls interception. peeks for TLS Handshake, converts socket to tls (tls-to-tls proxy)
+ * InboundIntercept - protocol independent ssl/tls interception for the inbound channel only (tls-to-plain proxy)
 * SMTP
  * SMTP.StripFromCapabilities - server response capability patch
  * SMTP.StripWithInvalidResponseCode - client STARTTLS stripping, invalid response code
@@ -12,6 +13,7 @@ poc implementation of STARTTLS stripping attacks
  * SMTP.StripWithError
  * SMTP.ProtocolDowngradeStripExtendedMode
  * SMTP.InjectCommand
+ * SMTP.InboundStarttlsProxy - (starttls-to-plain proxy)
 * POP3 
  * POP3.StripFromCapabilities
  * POP3.StripWithError
