@@ -3,7 +3,11 @@
 # striptls - auditing proxy
 #### poc implementation of STARTTLS stripping attacks
 
-A generic tcp proxy implementation and audit tool to perform protocol independent `ssl/tls` interception and `STARTTLS` stripping attacks on `SMTP`, `POP3`, `IMAP`, `FTP`, `NNTP`, `XMPP`, `ACAP` and `IRC`. 
+A generic tcp proxy implementation and audit tool to perform protocol independent `ssl/tls` interception and `STARTTLS` stripping attacks on `SMTP`, `POP3`, `IMAP`, `FTP`, `NNTP`, `XMPP`, `ACAP` and `IRC`.
+
+###### Requires: 
+ * Python >= 2.7.9 (`SSLContext`)
+ * (optional for tls interception) Certificate and PrivateKey in PEM format (single file) `--key=server.pem`
 
 #### Vectors
 
