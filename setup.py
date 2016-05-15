@@ -9,7 +9,7 @@ def read(fname):
 
 setup(
     name="striptls",
-    version="0.3",
+    version="0.4",
     packages=["striptls"],
     author="tintinweb",
     author_email="tintinweb@oststrom.com",
@@ -18,7 +18,7 @@ setup(
     license="GPLv2",
     keywords=["striptls", "starttls", "strip", "attack", "proxy"],
     url="https://github.com/tintinweb/striptls/",
-    download_url="https://github.com/tintinweb/striptls/tarball/v0.3",
+    download_url="https://github.com/tintinweb/striptls/tarball/v0.4",
     #python setup.py register -r https://testpypi.python.org/pypi
     long_description=read("README.rst") if os.path.isfile("README.rst") else read("README.md"),
     install_requires=[],
