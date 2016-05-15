@@ -1,6 +1,11 @@
-# striptls - auditing proxy
+![STRIPTLS](http://i68.tinypic.com/2iqz7t2.png)
 
-poc implementation of STARTTLS stripping attacks
+# striptls - auditing proxy
+#### poc implementation of STARTTLS stripping attacks
+
+A generic tcp proxy implementation and audit tool to perform protocol independent `ssl/tls` interception and `STARTTLS` stripping attacks on `SMTP`, `POP3`, `IMAP`, `FTP`, `NNTP`, `XMPP`, `ACAP` and `IRC`. 
+
+#### Vectors
 
 * GENERIC
  * Intercept - protocol independent ssl/tls interception. peeks for TLS Handshake, converts socket to tls (tls-to-tls proxy)
@@ -49,62 +54,65 @@ poc implementation of STARTTLS stripping attacks
 
 Results:
 
-    - [*] client: 127.0.0.1
-    -     [Vulnerable!] <class striptls.StripWithInvalidResponseCode at 0xffd3138c>
-    -     [Vulnerable!] <class striptls.StripWithTemporaryError at 0xffd4611c>
-    -     [           ] <class striptls.StripFromCapabilities at 0xffd316bc>
-    -     [Vulnerable!] <class striptls.StripWithError at 0xffd4614c>
-    - [*] client: 192.168.139.1
-    -     [Vulnerable!] <class striptls.StripInboundTLS at 0x7f08319a6808>
-    -     [Vulnerable!] <class striptls.StripFromCapabilities at 0x7f08319a67a0>
-    -     [Vulnerable!] <class striptls.UntrustedIntercept at 0x7f08319a6870>
-
+```python
+- [*] client: 127.0.0.1
+-     [Vulnerable!] <class striptls.StripWithInvalidResponseCode at 0xffd3138c>
+-     [Vulnerable!] <class striptls.StripWithTemporaryError at 0xffd4611c>
+-     [           ] <class striptls.StripFromCapabilities at 0xffd316bc>
+-     [Vulnerable!] <class striptls.StripWithError at 0xffd4614c>
+- [*] client: 192.168.139.1
+-     [Vulnerable!] <class striptls.StripInboundTLS at 0x7f08319a6808>
+-     [Vulnerable!] <class striptls.StripFromCapabilities at 0x7f08319a67a0>
+-     [Vulnerable!] <class striptls.UntrustedIntercept at 0x7f08319a6870>
+```
 
 ## Usage
 
-    #> python -m striptls --help    # from pip/setup.py
-    #> python striptls --help       # from source / root folder
-    Usage: striptls.py [options]
-	
-	       example: striptls.py --listen 0.0.0.0:25 --remote mail.server.tld:25
-	
-	
-	Options:
-	  -h, --help            show this help message and exit
-	  -q, --quiet           be quiet [default: True]
-	  -l LISTEN, --listen=LISTEN
-	                        listen ip:port [default: 0.0.0.0:<remote_port>]
-	  -r REMOTE, --remote=REMOTE
-	                        remote target ip:port to forward sessions to
-	  -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
-	                        format assumed [default: server.pem]
-	  -s, --generic-ssl-intercept
-	                        dynamically intercept SSL/TLS
-	  -b BUFFER_SIZE, --bufsiz=BUFFER_SIZE
-	  -x VECTORS, --vectors=VECTORS
-	                        Comma separated list of vectors. Use 'ALL' (default)
-	                        to select all vectors, 'NONE' for tcp/ssl proxy mode.
-	                        Available vectors: ACAP.StripFromCapabilities,
-	                        ACAP.StripWithError, ACAP.UntrustedIntercept,
-	                        FTP.StripFromCapabilities, FTP.StripWithError,
-	                        FTP.UntrustedIntercept, GENERIC.Intercept,
-	                        IMAP.ProtocolDowngradeToV2,
-	                        IMAP.StripFromCapabilities, IMAP.StripWithError,
-	                        IMAP.UntrustedIntercept,
-	                        IRC.StripCAPWithNotRegistered,
-	                        IRC.StripFromCapabilities, IRC.StripWithError,
-	                        IRC.StripWithNotRegistered, IRC.StripWithSilentDrop,
-	                        IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
-	                        NNTP.StripWithError, NNTP.UntrustedIntercept,
-	                        POP3.StripFromCapabilities, POP3.StripWithError,
-	                        POP3.UntrustedIntercept, SMTP.InboundStarttlsProxy,
-	                        SMTP.InjectCommand,
-	                        SMTP.ProtocolDowngradeStripExtendedMode,
-	                        SMTP.StripFromCapabilities, SMTP.StripWithError,
-	                        SMTP.StripWithInvalidResponseCode,
-	                        SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
-	                        XMPP.StripFromCapabilities, XMPP.StripInboundTLS,
-	                        XMPP.UntrustedIntercept [default: ALL]
+```
+#> python -m striptls --help    # from pip/setup.py
+#> python striptls --help       # from source / root folder
+Usage: striptls.py [options]
+
+       example: striptls.py --listen 0.0.0.0:25 --remote mail.server.tld:25
+
+
+Options:
+  -h, --help            show this help message and exit
+  -q, --quiet           be quiet [default: True]
+  -l LISTEN, --listen=LISTEN
+                        listen ip:port [default: 0.0.0.0:<remote_port>]
+  -r REMOTE, --remote=REMOTE
+                        remote target ip:port to forward sessions to
+  -k KEY, --key=KEY     SSL Certificate and Private key file to use, PEM
+                        format assumed [default: server.pem]
+  -s, --generic-ssl-intercept
+                        dynamically intercept SSL/TLS
+  -b BUFFER_SIZE, --bufsiz=BUFFER_SIZE
+  -x VECTORS, --vectors=VECTORS
+                        Comma separated list of vectors. Use 'ALL' (default)
+                        to select all vectors, 'NONE' for tcp/ssl proxy mode.
+                        Available vectors: ACAP.StripFromCapabilities,
+                        ACAP.StripWithError, ACAP.UntrustedIntercept,
+                        FTP.StripFromCapabilities, FTP.StripWithError,
+                        FTP.UntrustedIntercept, GENERIC.Intercept,
+                        IMAP.ProtocolDowngradeToV2,
+                        IMAP.StripFromCapabilities, IMAP.StripWithError,
+                        IMAP.UntrustedIntercept,
+                        IRC.StripCAPWithNotRegistered,
+                        IRC.StripFromCapabilities, IRC.StripWithError,
+                        IRC.StripWithNotRegistered, IRC.StripWithSilentDrop,
+                        IRC.UntrustedIntercept, NNTP.StripFromCapabilities,
+                        NNTP.StripWithError, NNTP.UntrustedIntercept,
+                        POP3.StripFromCapabilities, POP3.StripWithError,
+                        POP3.UntrustedIntercept, SMTP.InboundStarttlsProxy,
+                        SMTP.InjectCommand,
+                        SMTP.ProtocolDowngradeStripExtendedMode,
+                        SMTP.StripFromCapabilities, SMTP.StripWithError,
+                        SMTP.StripWithInvalidResponseCode,
+                        SMTP.StripWithTemporaryError, SMTP.UntrustedIntercept,
+                        XMPP.StripFromCapabilities, XMPP.StripInboundTLS,
+                        XMPP.UntrustedIntercept [default: ALL]
+```
 
 ## Install (optional)
 
