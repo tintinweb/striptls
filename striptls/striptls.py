@@ -993,6 +993,16 @@ class Vectors:
     
     class XMPP:
         _PROTO_ID = 5222
+
+        @staticmethod
+        def _detect_starttls_tag_start_end(data):
+            start = data.index("<starttls")
+            try:
+                end = data.index("</starttls>", start) + len("</starttls>")
+            except ValueError:
+                end = data.index("/>", start) + len("/>")
+            return start, end
+
         class StripFromCapabilities:
             ''' 1) Force Server response to *NOT* announce STARTTLS support
                 2) raise exception if client tries to negotiated STARTTLS
@@ -1000,8 +1010,7 @@ class Vectors:
             @staticmethod
             def mangle_server_data(session, data, rewrite):
                 if "<starttls" in data:
-                    start = data.index("<starttls")
-                    end = data.index("</starttls>",start)+len("</starttls>")
+                    start, end = Vectors.XMPP._detect_starttls_tag_start_end(data)
                     data = data[:start] + data[end:]        # strip starttls from capabilities
                 return data
             @staticmethod
@@ -1023,8 +1032,7 @@ class Vectors:
             @staticmethod
             def mangle_server_data(session, data, rewrite):
                 if "<starttls" in data:
-                    start = data.index("<starttls")
-                    end = data.index("</starttls>",start)+len("</starttls>")
+                    start, end = Vectors.XMPP._detect_starttls_tag_start_end(data)
                     starttls_args = data[start:end]
                     data = data[:start] + data[end:]        # strip inbound starttls
                     if "required" in starttls_args:
@@ -1037,8 +1045,8 @@ class Vectors:
 
                         logger.debug("%s [      ] => [server][mangled] performing outbound SSL handshake"%(session))
                         session.outbound.ssl_wrap_socket()
-
                 return data
+
             @staticmethod
             def mangle_client_data(session, data, rewrite):
                 if "<starttls" in data:
@@ -1440,7 +1448,7 @@ class RewriteDispatcher(object):
                              'result':None}) 
  
         #mangle = iter(self.get_mangles(session.protocol.protocol_id)).next()
-        logger.debug("<RewriteDispatcher  - changed mangle: %s new: %s>"%(mangle,"False" if len(client_mangle_history)>len(all_mangles) else "True"))
+        logger.debug("<RewriteDispatcher  - changed vector: %s new: %s>"%(mangle,"False" if len(client_mangle_history)>len(all_mangles) else "True"))
         self.session_to_mangle[session] = mangle
         return mangle
         
