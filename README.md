@@ -3,7 +3,14 @@
 # striptls - auditing proxy
 #### poc implementation of STARTTLS stripping attacks
 
-A generic tcp proxy implementation and audit tool to perform protocol independent `ssl/tls` interception and `STARTTLS` stripping attacks on `SMTP`, `POP3`, `IMAP`, `FTP`, `NNTP`, `XMPP`, `ACAP` and `IRC`.
+A generic tcp proxy implementation and **audit tool** to perform **protocol independent** `ssl/tls` interception and `STARTTLS` stripping attacks on `SMTP`, `POP3`, `IMAP`, `FTP`, `NNTP`, `XMPP`, `ACAP` and `IRC`.
+
+##### :trophy: Trophies
+
+* CVE-2016-0772  - [python: smtplib](https://github.com/tintinweb/pub/tree/master/pocs/cve-2016-0772)
+* CVE-2016-10027 - [Smack XMPP library](https://twitter.com/sylv1_secu/status/817305746828361728)
+
+<sub>//Discovered a vulnerability with the help of this project? Drop me a line!</sub>
 
 ###### Requires: 
  * Python >= 2.7.9 (`SSLContext`)
