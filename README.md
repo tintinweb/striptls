@@ -1,4 +1,5 @@
-![STRIPTLS](http://i68.tinypic.com/2iqz7t2.png)
+![image](https://user-images.githubusercontent.com/2865694/143416063-b22e65a4-4005-453b-88d1-5477de56fdc4.png)
+
 
 # striptls - auditing proxy
 #### poc implementation of STARTTLS stripping attacks
