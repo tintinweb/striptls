@@ -6,6 +6,8 @@
 
 A generic tcp proxy implementation and **audit tool** to perform **protocol independent** `ssl/tls` interception and `STARTTLS` stripping attacks on `SMTP`, `POP3`, `IMAP`, `FTP`, `NNTP`, `XMPP`, `ACAP` and `IRC`.
 
+**Python2!**
+
 ##### :trophy: Trophies
 
 * CVE-2016-0772  - [python: smtplib](https://github.com/tintinweb/pub/tree/master/pocs/cve-2016-0772)
@@ -14,7 +16,7 @@ A generic tcp proxy implementation and **audit tool** to perform **protocol inde
 <sub>//Discovered a vulnerability with the help of this project? Drop me a line!</sub>
 
 ###### Requires: 
- * Python >= 2.7.9 (`SSLContext`)
+ * Python >= 2.7.9 (`SSLContext`) < Python 3
  * (optional for tls interception) Certificate and PrivateKey in PEM format (single file) `--key=server.pem`
 
 #### Vectors
@@ -79,6 +81,11 @@ Results:
 ```
 
 ## Usage
+
+```
+#> python2 -m pip install striptls
+#> python2 -m striptls --help
+```
 
 ```
 #> python -m striptls --help    # from pip/setup.py
